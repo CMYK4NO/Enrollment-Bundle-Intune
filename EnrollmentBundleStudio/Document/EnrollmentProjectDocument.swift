@@ -144,7 +144,7 @@ struct EnrollmentProjectDocument: FileDocument, Equatable {
         if project.settings.onboardingFlagPath == "/Library/Logs/Microsoft/IntuneScripts/onboarding.flag" {
             project.settings.onboardingFlagPath = ProjectSettings.defaultOnboardingFlagPath
         }
-        // Catalogue items that ship their own icon (Microsoft 365 and Office, BeyondTrust) use it instead of the installed app's icon.
+        // Catalogue items that ship their own icon (Microsoft 365 and Office) use it instead of the installed app's icon.
         applyBundledCatalogIcons()
     }
 

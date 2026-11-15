@@ -6,8 +6,8 @@ final class CatalogTests: XCTestCase {
         let names = Set(ApplicationCatalog.entries.map { $0.displayName })
         let required = [
             "Microsoft Company Portal", "Microsoft Defender", "Microsoft Edge",
-            "Microsoft 365 and Office", "GlobalProtect", "Visual Studio Code",
-            "Google Chrome", "Firefox", "Slack", "Zoom.us", "App Catalog", "BeyondTrust"
+            "Microsoft 365 and Office", "Visual Studio Code",
+            "Google Chrome", "Firefox", "Slack", "Zoom.us"
         ]
         for name in required {
             XCTAssertTrue(names.contains(name), "Missing \(name)")

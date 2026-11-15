@@ -73,7 +73,7 @@ To add a schema version: raise `AppInfo.currentSchemaVersion`, add a step to `Pr
 
 ## Adding a catalogue application
 
-Add a `CatalogEntry` to `ApplicationCatalog.entries` with a unique `id`, display name, category, absolute `.app` path, bundle identifier, optional process name, default timeout and a validation method that needs no extra value. `CatalogTests` checks the entry. Verify the path and bundle identifier on a real Mac. To ship an icon with the entry, put an `.icns` file in `EnrollmentBundleStudio/Resources/CatalogIcons/` and set `bundledIconResource` to its name without extension (BeyondTrust does this). Adding the entry to a project copies the icon into the project's `Icons/` folder and uses it as the application icon.
+Add a `CatalogEntry` to `ApplicationCatalog.entries` with a unique `id`, display name, category, absolute `.app` path, bundle identifier, optional process name, default timeout and a validation method that needs no extra value. `CatalogTests` checks the entry. Verify the path and bundle identifier on a real Mac. To ship an icon with the entry, put an `.icns` file in `EnrollmentBundleStudio/Resources/CatalogIcons/` and set `bundledIconResource` to its name without extension (Microsoft 365 does this). Adding the entry to a project copies the icon into the project's `Icons/` folder and uses it as the application icon.
 
 ## Adding a task type
 

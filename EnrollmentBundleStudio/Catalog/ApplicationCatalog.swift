@@ -74,13 +74,6 @@ enum ApplicationCatalog {
             bundledIconResource: "Microsoft365"
         ),
         CatalogEntry(
-            id: "globalprotect", displayName: "GlobalProtect", category: "Security Tools",
-            applicationPath: "/Applications/GlobalProtect.app", bundleIdentifier: "com.paloaltonetworks.GlobalProtect.client",
-            processName: "GlobalProtect", defaultTimeoutSeconds: 1200, suggestedValidation: .bundleIdentifier,
-            defaultRequired: false, symbolName: "lock.shield",
-            notes: "Deploy the system extension and VPN profiles before the app."
-        ),
-        CatalogEntry(
             id: "visual-studio-code", displayName: "Visual Studio Code", category: "Developer Tools",
             applicationPath: "/Applications/Visual Studio Code.app", bundleIdentifier: "com.microsoft.VSCode",
             processName: "", defaultTimeoutSeconds: 1200, suggestedValidation: .bundleIdentifier,
@@ -114,21 +107,6 @@ enum ApplicationCatalog {
             processName: "zoom.us", defaultTimeoutSeconds: 1200, suggestedValidation: .bundleIdentifier,
             defaultRequired: false, symbolName: "video",
             notes: "Use the Zoom Workplace installer package from the Zoom download center."
-        ),
-        CatalogEntry(
-            id: "app-catalog", displayName: "App Catalog", category: "Device Management",
-            applicationPath: "/Applications/Catalog.app", bundleIdentifier: "nl.root3.catalog",
-            processName: "Catalog", defaultTimeoutSeconds: 900, suggestedValidation: .applicationPath,
-            defaultRequired: false, symbolName: "square.grid.3x3",
-            notes: "Root3 App Catalog (Catalog.app, agent at /usr/local/bin/catalog). Detection uses the application path; confirm the bundle identifier on a device with: osascript -e 'id of app \"Catalog\"'."
-        ),
-        CatalogEntry(
-            id: "beyondtrust", displayName: "BeyondTrust", category: "Security Tools",
-            applicationPath: "/Applications/BeyondTrust/PMCPackageManager.app", bundleIdentifier: "com.beyondtrust.PMCPackageManager",
-            processName: "", defaultTimeoutSeconds: 1200, suggestedValidation: .applicationPath,
-            defaultRequired: false, symbolName: "key",
-            notes: "BeyondTrust Endpoint Privilege Management package manager (PMCPackageManager). Detection uses the application path.",
-            bundledIconResource: "BeyondTrust"
         )
     ]
 
