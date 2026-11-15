@@ -42,6 +42,16 @@ This repository contains **Phases 1 to 4** (complete): the app shell, project do
 - Xcode 16 or later to build (the project uses file-system-synchronized folders).
 - No third-party dependencies.
 
+## Download
+
+Get the latest build from the [Releases page](https://github.com/CMYK4NO/Enrollment-Bundle-Intune/releases). It needs macOS 13 or later.
+
+1. Download the zip and unzip it.
+2. Move **Enrollment Bundle Studio.app** to Applications.
+3. On first launch, Control-click the app and choose **Open**. If macOS still refuses, open **System Settings > Privacy & Security** and choose **Open Anyway**.
+
+The release is not notarized, so macOS asks for this confirmation once. The app does not remove the quarantine flag or change any security setting for you. If you prefer not to run an unsigned build, build it from source below.
+
 ## Build and run
 
 1. Open `EnrollmentBundleStudio.xcodeproj` in Xcode.
