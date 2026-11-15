@@ -1,6 +1,38 @@
 # Enrollment Bundle Studio
 
-A native macOS app for designing swiftDialog-based enrollment experiences for Microsoft Intune. Everything runs locally: no server, no account, no network access, no Homebrew, Python or Node.js.
+A native macOS app for designing swiftDialog-based enrollment experiences for Microsoft Intune. Design the splash screen, choose the apps and scripts, preview and validate it, then build the installer package. Everything runs locally: no server, no account, no Homebrew, Python or Node.js.
+
+![Splash screen demo](docs/images/splash-demo.gif)
+
+*The enrollment splash screen the app generates, played back with Preview > Simulate. Nothing is installed or executed.*
+
+Step by step: **[How to use the tool](docs/HOW_TO_USE.md)**.
+
+## What it does
+
+- **Design** the dialog: title, welcome text, logo, banner, accent colour, placeholders such as `{username}` and `{serialnumber}`.
+- **Choose** applications from a built-in catalogue or add your own, grouped and ordered.
+- **Add** local shell scripts, with checks for Bash 3.2 compatibility and common risks. Scripts are never run by the app.
+- **Control** execution order, parallel groups, dependencies and when the Done button unlocks.
+- **Preview** the dialog natively, or with the real swiftDialog, using simulated task states.
+- **Validate** the project, then build and verify an unsigned flat `.pkg` with a build report.
+- **Upload** the package to Microsoft Intune from the app, signing in with your default browser.
+
+## Screenshots
+
+| Overview | Branding |
+|---|---|
+| ![Overview](docs/images/overview.png) | ![Branding](docs/images/branding.png) |
+
+| Applications | Execution order |
+|---|---|
+| ![Applications](docs/images/applications.png) | ![Execution](docs/images/execution.png) |
+
+| Preview, success | Preview, warning (dark mode) |
+|---|---|
+| ![Static preview](docs/images/preview-static.png) | ![Preview with a warning](docs/images/preview-warning.png) |
+
+![Package Builder](docs/images/package-builder.png)
 
 This repository contains **Phases 1 to 4** (complete): the app shell, project documents, Branding and Applications editors, the application catalogue and static preview, plus script import and inspection, execution order and dependencies, the validation engine, configuration export and import, schema migration, the generated Bash 3.2 enrollment framework with export, simulation and live swiftDialog preview, and unsigned flat package builds with verification, reports and history. See `docs/ARCHITECTURE.md`, `docs/SCRIPTS_VALIDATION_AND_TRANSFER.md`, `docs/FRAMEWORK.md` and `docs/PACKAGING_AND_DEPLOYMENT.md`.
 
@@ -43,6 +75,7 @@ Tests cover script inspection and import, hashing, dependency ordering and cycle
 - **Preview > Simulate** plays a timed run; **Live Preview** opens the real swiftDialog (if installed) and mirrors the preview. Nothing is executed.
 - **Package Builder > Build Package** builds and verifies the unsigned flat installer package and writes a build report; **Export Generated Files** and **Copy Test Commands** support testing without installing.
 - **Build History** lists previous builds with their SHA-256 and reports.
+- **Upload to Intune** (Package Builder, after a verified build) signs you in through your default browser and uploads the package as a macOS app (PKG). It needs an Entra app registration; see `docs/PACKAGING_AND_DEPLOYMENT.md`.
 - **Onboarding guard:** the framework writes `/Library/Logs/Microsoft/IntuneScripts/onBoarding/onboarding.flag` after success and skips Macs that already have it, and on a first run it skips Macs whose MDM enrollment is older than the enrollment window (default 20 hours). No Intune pre-install script is needed.
 - **swiftDialog:** a normal enrollment run installs swiftDialog automatically (official GitHub release, signature verified) before showing the dialog; previews and `--dry-run` never install it.
 - **Preview** shows the dialog. Switch scenarios, switch between sample values and this Mac, switch light and dark, and right-click any item to simulate a status. The completion button locks and unlocks according to the required tasks, including hidden ones.
@@ -78,7 +111,6 @@ The app icon is `EnrollmentBundleStudio/Assets.xcassets/AppIcon.appiconset` (a g
 
 ## Known limitations
 
-- "Run custom script" for an application cannot link a script; the app is detected like Wait for Intune. Use a script task with a dependency instead.
 - Packages are unsigned flat component packages by design. Confirm your Intune app type accepts them.
 - Placeholder Insert appends to the end of a field because SwiftUI on macOS 13 does not expose the cursor position.
 - A migrated project writes its backup on the next save.
