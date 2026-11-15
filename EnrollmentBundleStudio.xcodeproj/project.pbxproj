@@ -1,0 +1,396 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		DCD706D628B19D767C9F1286 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E51A3FB1C40118DCCFC1AE69 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1FD0B122F5C6FD49247B8F7F;
+			remoteInfo = EnrollmentBundleStudio;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A95F4C882D22EC3778FF969E /* Enrollment Bundle Studio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Enrollment Bundle Studio.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		722952D32972BA41F31B2EBB /* EnrollmentBundleStudioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EnrollmentBundleStudioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DC5DEEA242FC5C35D8D25692 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F24C5FAA35CC45BE429E29EA /* EnrollmentBundleStudio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = EnrollmentBundleStudio.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		642DAF961AA12AFCB55AE843 /* EnrollmentBundleStudio */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EnrollmentBundleStudio;
+			sourceTree = "<group>";
+		};
+		5D6979D6D6EE20643E20C613 /* EnrollmentBundleStudioTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EnrollmentBundleStudioTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A995526B5EDAD41C8A2FFDFB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A04CCC45ACFDC50DE5389DAF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B078ED715D5B0AC5403ABD2A = {
+			isa = PBXGroup;
+			children = (
+				36794601C75F9232528CBEA3 /* Config */,
+				642DAF961AA12AFCB55AE843 /* EnrollmentBundleStudio */,
+				5D6979D6D6EE20643E20C613 /* EnrollmentBundleStudioTests */,
+				7E375099F336A0478D5F4DC7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		36794601C75F9232528CBEA3 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				DC5DEEA242FC5C35D8D25692 /* Info.plist */,
+				F24C5FAA35CC45BE429E29EA /* EnrollmentBundleStudio.entitlements */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		7E375099F336A0478D5F4DC7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A95F4C882D22EC3778FF969E /* Enrollment Bundle Studio.app */,
+				722952D32972BA41F31B2EBB /* EnrollmentBundleStudioTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1FD0B122F5C6FD49247B8F7F /* EnrollmentBundleStudio */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0509676A1379AB9CF1CD2751 /* Build configuration list for PBXNativeTarget "EnrollmentBundleStudio" */;
+			buildPhases = (
+				B4DFC852CEDAF5902D2EE824 /* Sources */,
+				A995526B5EDAD41C8A2FFDFB /* Frameworks */,
+				12D2D072C878AAE44B429648 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				642DAF961AA12AFCB55AE843 /* EnrollmentBundleStudio */,
+			);
+			name = EnrollmentBundleStudio;
+			packageProductDependencies = (
+			);
+			productName = EnrollmentBundleStudio;
+			productReference = A95F4C882D22EC3778FF969E /* Enrollment Bundle Studio.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5BA6E3A1E40A0B6A18AF918F /* EnrollmentBundleStudioTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EE175AE93F8A1ED292E90D28 /* Build configuration list for PBXNativeTarget "EnrollmentBundleStudioTests" */;
+			buildPhases = (
+				957709E4CBA1FEEAD11591E7 /* Sources */,
+				A04CCC45ACFDC50DE5389DAF /* Frameworks */,
+				A0FB583E4B7784701F09BAE8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A0D4EBEA42BBC717D723A56C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5D6979D6D6EE20643E20C613 /* EnrollmentBundleStudioTests */,
+			);
+			name = EnrollmentBundleStudioTests;
+			packageProductDependencies = (
+			);
+			productName = EnrollmentBundleStudioTests;
+			productReference = 722952D32972BA41F31B2EBB /* EnrollmentBundleStudioTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E51A3FB1C40118DCCFC1AE69 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					1FD0B122F5C6FD49247B8F7F = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					5BA6E3A1E40A0B6A18AF918F = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = 1FD0B122F5C6FD49247B8F7F;
+					};
+				};
+			};
+			buildConfigurationList = 0711FF64CBD85BE5AAF43B6B /* Build configuration list for PBXProject "EnrollmentBundleStudio" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B078ED715D5B0AC5403ABD2A;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 7E375099F336A0478D5F4DC7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1FD0B122F5C6FD49247B8F7F /* EnrollmentBundleStudio */,
+				5BA6E3A1E40A0B6A18AF918F /* EnrollmentBundleStudioTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		12D2D072C878AAE44B429648 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0FB583E4B7784701F09BAE8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B4DFC852CEDAF5902D2EE824 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		957709E4CBA1FEEAD11591E7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A0D4EBEA42BBC717D723A56C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1FD0B122F5C6FD49247B8F7F /* EnrollmentBundleStudio */;
+			targetProxy = DCD706D628B19D767C9F1286 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0932E92491E9273C5AC3DEA9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		15BF2F71D0A13BC924B21A02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		7CB750F1542A021FA4EB94C0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/EnrollmentBundleStudio.entitlements;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Enrollment Bundle Studio";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © Enrollment Bundle Studio contributors.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.enrollmentbundlestudio;
+				PRODUCT_MODULE_NAME = EnrollmentBundleStudio;
+				PRODUCT_NAME = "Enrollment Bundle Studio";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		4877DBE38E7771742DDC0DE9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/EnrollmentBundleStudio.entitlements;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Enrollment Bundle Studio";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © Enrollment Bundle Studio contributors.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.enrollmentbundlestudio;
+				PRODUCT_MODULE_NAME = EnrollmentBundleStudio;
+				PRODUCT_NAME = "Enrollment Bundle Studio";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		6A5B110AE78B6925E0DD717B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.enrollmentbundlestudio.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Enrollment Bundle Studio.app/Contents/MacOS/Enrollment Bundle Studio";
+			};
+			name = Debug;
+		};
+		C25ABE81D11BD5A631B1AB3B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.enrollmentbundlestudio.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Enrollment Bundle Studio.app/Contents/MacOS/Enrollment Bundle Studio";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0711FF64CBD85BE5AAF43B6B /* Build configuration list for PBXProject "EnrollmentBundleStudio" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0932E92491E9273C5AC3DEA9 /* Debug */,
+				15BF2F71D0A13BC924B21A02 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0509676A1379AB9CF1CD2751 /* Build configuration list for PBXNativeTarget "EnrollmentBundleStudio" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7CB750F1542A021FA4EB94C0 /* Debug */,
+				4877DBE38E7771742DDC0DE9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EE175AE93F8A1ED292E90D28 /* Build configuration list for PBXNativeTarget "EnrollmentBundleStudioTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6A5B110AE78B6925E0DD717B /* Debug */,
+				C25ABE81D11BD5A631B1AB3B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E51A3FB1C40118DCCFC1AE69 /* Project object */;
+}

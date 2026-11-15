@@ -1,0 +1,306 @@
+{
+  "applicationGroups": [
+    {
+      "applications": [
+        {
+          "applicationPath": "/Applications/Company Portal.app",
+          "bundleIdentifier": "com.microsoft.CompanyPortalMac",
+          "catalogID": "company-portal",
+          "detection": {
+            "method": "bundleIdentifier",
+            "value": ""
+          },
+          "displayName": "Microsoft Company Portal",
+          "execution": {
+            "allowRerun": false,
+            "allowSkip": false,
+            "context": "root",
+            "dependencies": [],
+            "executionOrder": 10,
+            "isRequired": true,
+            "isVisible": true,
+            "messages": {
+              "failure": "Not installed",
+              "progress": "Installing…",
+              "success": "Installed",
+              "waiting": "Waiting for Intune",
+              "warning": "Installed with warnings"
+            },
+            "parallelGroup": "",
+            "retryCount": 0,
+            "timeoutSeconds": 900
+          },
+          "icon": {
+            "kind": "applicationBundle",
+            "value": ""
+          },
+          "id": "0A0B2688-CBED-51A8-923D-75FA4A6DB6B6",
+          "installStrategy": "waitForIntune",
+          "isEnabled": true,
+          "processName": "Company Portal",
+          "taskIdentifier": "app.microsoft-company-portal"
+        }
+      ],
+      "displayBehavior": "individualItems",
+      "id": "25EB2872-7AB2-5CCF-B242-BB371CB95D45",
+      "isRequired": true,
+      "name": "Device Management",
+      "symbolName": "gearshape.2"
+    },
+    {
+      "applications": [
+        {
+          "applicationPath": "/Applications/Microsoft Defender.app",
+          "bundleIdentifier": "com.microsoft.wdav",
+          "catalogID": "microsoft-defender",
+          "detection": {
+            "method": "bundleIdentifier",
+            "value": ""
+          },
+          "displayName": "Microsoft Defender",
+          "execution": {
+            "allowRerun": false,
+            "allowSkip": false,
+            "context": "root",
+            "dependencies": [
+              "app.microsoft-company-portal"
+            ],
+            "executionOrder": 20,
+            "isRequired": true,
+            "isVisible": true,
+            "messages": {
+              "failure": "Not installed",
+              "progress": "Installing…",
+              "success": "Installed",
+              "waiting": "Waiting for Intune",
+              "warning": "Installed with warnings"
+            },
+            "parallelGroup": "",
+            "retryCount": 0,
+            "timeoutSeconds": 1800
+          },
+          "icon": {
+            "kind": "applicationBundle",
+            "value": ""
+          },
+          "id": "D57DF718-495F-566B-9CBC-BA59B692C05E",
+          "installStrategy": "waitForIntune",
+          "isEnabled": true,
+          "processName": "wdavdaemon",
+          "taskIdentifier": "app.microsoft-defender"
+        }
+      ],
+      "displayBehavior": "individualItems",
+      "id": "594CC699-635B-5C2B-838C-720731C359B2",
+      "isRequired": true,
+      "name": "Security Tools",
+      "symbolName": "lock.shield"
+    },
+    {
+      "applications": [
+        {
+          "applicationPath": "/Applications/Microsoft Word.app",
+          "bundleIdentifier": "com.microsoft.Word",
+          "catalogID": "microsoft-365",
+          "detection": {
+            "method": "bundleIdentifier",
+            "value": ""
+          },
+          "displayName": "Microsoft 365 and Office",
+          "execution": {
+            "allowRerun": false,
+            "allowSkip": false,
+            "context": "root",
+            "dependencies": [],
+            "executionOrder": 30,
+            "isRequired": false,
+            "isVisible": true,
+            "messages": {
+              "failure": "Not installed",
+              "progress": "Installing…",
+              "success": "Installed",
+              "waiting": "Waiting for Intune",
+              "warning": "Installed with warnings"
+            },
+            "parallelGroup": "",
+            "retryCount": 0,
+            "timeoutSeconds": 3600
+          },
+          "icon": {
+            "kind": "applicationBundle",
+            "value": ""
+          },
+          "id": "0688383C-5435-50C9-83DC-9A685C439D58",
+          "installStrategy": "waitForIntune",
+          "isEnabled": true,
+          "processName": "Microsoft Word",
+          "taskIdentifier": "app.microsoft-365-and-office"
+        }
+      ],
+      "displayBehavior": "singleSummaryItem",
+      "id": "0DFEFBC4-AB0E-50E7-AE21-E5FD49EFE626",
+      "isRequired": false,
+      "name": "Microsoft 365",
+      "symbolName": "square.grid.2x2"
+    },
+    {
+      "applications": [
+        {
+          "applicationPath": "/Applications/Microsoft Edge.app",
+          "bundleIdentifier": "com.microsoft.edgemac",
+          "catalogID": "microsoft-edge",
+          "detection": {
+            "method": "bundleIdentifier",
+            "value": ""
+          },
+          "displayName": "Microsoft Edge",
+          "execution": {
+            "allowRerun": false,
+            "allowSkip": false,
+            "context": "root",
+            "dependencies": [],
+            "executionOrder": 40,
+            "isRequired": false,
+            "isVisible": true,
+            "messages": {
+              "failure": "Not installed",
+              "progress": "Installing…",
+              "success": "Installed",
+              "waiting": "Waiting for Intune",
+              "warning": "Installed with warnings"
+            },
+            "parallelGroup": "",
+            "retryCount": 0,
+            "timeoutSeconds": 1200
+          },
+          "icon": {
+            "kind": "applicationBundle",
+            "value": ""
+          },
+          "id": "82005853-A8EB-5919-A303-E3BC9424DF20",
+          "installStrategy": "waitForIntune",
+          "isEnabled": true,
+          "processName": "Microsoft Edge",
+          "taskIdentifier": "app.microsoft-edge"
+        }
+      ],
+      "displayBehavior": "individualItems",
+      "id": "D517426D-23FA-5ABC-9204-C0922596D28F",
+      "isRequired": false,
+      "name": "Browsers",
+      "symbolName": "globe"
+    }
+  ],
+  "applicationVersion": "0.1.0",
+  "branding": {
+    "accentColor": "#0A64D2",
+    "buttonText": "Get Started",
+    "completionMessage": "All set. Click **Get Started** to begin using your Mac.",
+    "completionSymbol": "checkmark.seal.fill",
+    "failureMessage": "Some required items could not be set up. Please contact the Contoso Service Desk.",
+    "inProgressButtonText": "Please wait",
+    "infoboxTemplate": "**Computer:** {computername}\n**Model:** {computermodel}\n**macOS:** {osname} {osversion}\n**Serial:** {serialnumber}",
+    "logoPath": "Branding/CompanyLogo.png",
+    "showDeviceInfo": true,
+    "supportContact": "Contoso Service Desk, ext. 4357",
+    "supportURL": "https://support.contoso.example",
+    "title": "Welcome to {companyname}",
+    "warningMessage": "Your Mac is ready, but some optional apps are still installing. They will finish in the background.",
+    "welcomeMessage": "Hi {userfullname}, your Mac is being prepared by Contoso IT. Required apps install first. This usually takes 15 to 30 minutes."
+  },
+  "createdAt": "2026-11-14T09:00:00Z",
+  "id": "E4263E3B-F6EB-5DBE-A198-42D33EDEDB1E",
+  "modifiedAt": "2026-11-14T09:00:00Z",
+  "projectVersion": "1.0.0",
+  "schemaVersion": 4,
+  "scripts": [
+    {
+      "displayName": "Set computer name",
+      "execution": {
+        "allowRerun": false,
+        "allowSkip": false,
+        "context": "root",
+        "dependencies": [],
+        "executionOrder": 50,
+        "isRequired": false,
+        "isVisible": true,
+        "messages": {
+          "failure": "Could not set the name",
+          "progress": "Naming this Mac…",
+          "success": "Computer name set",
+          "waiting": "Waiting",
+          "warning": "Done with warnings"
+        },
+        "parallelGroup": "",
+        "retryCount": 1,
+        "timeoutSeconds": 120
+      },
+      "id": "EE37CD1E-899C-5268-9023-15E5F7EA1592",
+      "importedAt": "2026-11-14T09:00:00Z",
+      "interpreter": "/bin/bash",
+      "originalFilename": "SetComputerName.sh",
+      "relativePath": "Scripts/SetComputerName.sh",
+      "sha256": "450402938561f5f53cd5f343a055bfb149297bd03c6fdc0c850ae7b380ae3271",
+      "sourceWasExecutable": true,
+      "successExitCodes": [
+        0
+      ],
+      "taskIdentifier": "script.setcomputername"
+    }
+  ],
+  "settings": {
+    "applicationInstallStrategy": "waitForIntune",
+    "bundleIdentifier": "com.contoso.enrollment",
+    "debugLogging": false,
+    "defaultTaskTimeoutSeconds": 900,
+    "enrollmentWindowHours": 20,
+    "installLocation": "/Library/Application Support/Contoso/Enrollment",
+    "lockCompletionButtonUntilRequiredComplete": true,
+    "maximumEnrollmentDurationSeconds": 7200,
+    "minimumMacOSVersion": "26.0",
+    "onboardingFlagPath": "/Library/Logs/Microsoft/IntuneScripts/onBoarding/onboarding.flag",
+    "organizationName": "Contoso",
+    "outputDirectoryPath": "",
+    "packageDisplayName": "Contoso Enrollment",
+    "packageIdentifier": "com.contoso.enrollment.bundle",
+    "packageVersion": "1.0.0",
+    "projectName": "Contoso Mac Enrollment",
+    "scriptExecutionStrategy": "sequential",
+    "stateDirectory": "/Library/Application Support/Contoso/Enrollment/State",
+    "swiftDialogMinimumVersion": "2.5.0",
+    "swiftDialogPath": "/usr/local/bin/dialog",
+    "windowHeight": 640,
+    "windowWidth": 920
+  },
+  "systemTasks": [
+    {
+      "displayName": "Final validation",
+      "execution": {
+        "allowRerun": false,
+        "allowSkip": false,
+        "context": "root",
+        "dependencies": [],
+        "executionOrder": 900,
+        "isRequired": true,
+        "isVisible": false,
+        "messages": {
+          "failure": "Device not ready",
+          "progress": "Checking device readiness…",
+          "success": "Device ready",
+          "waiting": "Waiting for required items",
+          "warning": "Ready with warnings"
+        },
+        "parallelGroup": "",
+        "retryCount": 0,
+        "timeoutSeconds": 300
+      },
+      "icon": {
+        "kind": "sfSymbol",
+        "value": "checkmark.shield"
+      },
+      "id": "37F1DEE2-5800-53DC-9884-16210608A47A",
+      "taskIdentifier": "system.final-validation",
+      "type": "finalValidation"
+    }
+  ]
+}

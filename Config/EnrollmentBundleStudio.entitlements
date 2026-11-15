@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  App Sandbox is intentionally NOT enabled.
+  Enrollment Bundle Studio is distributed internally with Developer ID (not the Mac App Store).
+  Phase 4 runs /usr/bin/pkgbuild, /usr/bin/productbuild, /usr/sbin/pkgutil and /usr/bin/security
+  as child processes, reads Installer signing identities from the login keychain, and launches
+  /usr/local/bin/dialog for live previews. Sandboxed child processes inherit the sandbox, which
+  breaks those tools. See docs/ARCHITECTURE.md, "App Sandbox decision".
+  Hardened Runtime is enabled for Release builds so the app can be notarized.
+-->
+<plist version="1.0">
+<dict/>
+</plist>

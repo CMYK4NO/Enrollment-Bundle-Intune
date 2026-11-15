@@ -1,0 +1,9 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+.DS_Store
+# Exported archives and local builds
+*.xcarchive
