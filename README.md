@@ -2,7 +2,7 @@
 
 A native macOS app for designing swiftDialog-based enrollment experiences for Microsoft Intune. Design the splash screen, choose the apps and scripts, preview and validate it, then build the installer package. Everything runs locally: no server, no account, no Homebrew, Python or Node.js.
 
-![Splash screen demo](docs/images/splash-demo.gif)
+![Splash screen demo](docs/images/splash-demo.png)
 
 *The enrollment splash screen the app generates, played back with Preview > Simulate. Nothing is installed or executed.*
 
