@@ -28,9 +28,9 @@ Step by step: **[How to use the tool](docs/HOW_TO_USE.md)**.
 |---|---|
 | ![Applications](docs/images/applications.png) | ![Execution](docs/images/execution.png) |
 
-| Preview, success | Preview, warning (dark mode) |
+| Preview, success |
 |---|---|
-| ![Static preview](docs/images/preview-static.png) | ![Preview with a warning](docs/images/preview-warning.png) |
+| ![Static preview](docs/images/preview-static.png) |
 
 ![Package Builder](docs/images/package-builder.png)
 
