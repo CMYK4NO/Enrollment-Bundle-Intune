@@ -28,11 +28,11 @@ Step by step: **[How to use the tool](docs/HOW_TO_USE.md)**.
 |---|---|
 | ![Applications](docs/images/applications.png) | ![Execution](docs/images/execution.png) |
 
-| Preview, success |
+| Preview, success | Preview, warning (dark mode) |
 |---|---|
-| ![Static preview](docs/images/preview-static.png) |
+| ![Static preview](docs/images/preview-static.png) | ![Package Builder](docs/images/package-builder.png) |
 
-![Package Builder](docs/images/package-builder.png)
+
 
 This repository contains **Phases 1 to 4** (complete): the app shell, project documents, Branding and Applications editors, the application catalogue and static preview, plus script import and inspection, execution order and dependencies, the validation engine, configuration export and import, schema migration, the generated Bash 3.2 enrollment framework with export, simulation and live swiftDialog preview, and unsigned flat package builds with verification, reports and history. See `docs/ARCHITECTURE.md`, `docs/SCRIPTS_VALIDATION_AND_TRANSFER.md`, `docs/FRAMEWORK.md` and `docs/PACKAGING_AND_DEPLOYMENT.md`.
 
