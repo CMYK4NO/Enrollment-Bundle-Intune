@@ -29,9 +29,9 @@ final class RelativePathValidatorTests: XCTestCase {
     }
 
     func testResolveStaysInsideRoot() throws {
-        let root = URL(fileURLWithPath: "/tmp/Example.enrollmentproject", isDirectory: true)
+        let root = URL(fileURLWithPath: "/tmp/Example.ebsproject", isDirectory: true)
         let resolved = try XCTUnwrap(RelativePathValidator.resolve("Icons/Edge.png", in: root, allowedRoots: roots))
-        XCTAssertEqual(resolved.path, "/tmp/Example.enrollmentproject/Icons/Edge.png")
+        XCTAssertEqual(resolved.path, "/tmp/Example.ebsproject/Icons/Edge.png")
         XCTAssertNil(RelativePathValidator.resolve("Icons/../../x", in: root, allowedRoots: roots))
     }
 }

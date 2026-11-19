@@ -89,7 +89,7 @@ final class InstallerTests: XCTestCase {
         let reference = try XCTUnwrap(document.project.application(id: appID)?.installer)
         XCTAssertEqual(reference.relativePath, "Installers/Example-Tool.pkg")
 
-        let projectURL = directory.appendingPathComponent("Test.enrollmentproject", isDirectory: true)
+        let projectURL = directory.appendingPathComponent("Test.ebsproject", isDirectory: true)
         try document.makeFileWrapper(existing: nil).write(to: projectURL, options: .atomic, originalContentsURL: nil)
         let copied = projectURL.appendingPathComponent("Installers/Example-Tool.pkg")
         XCTAssertEqual(try Data(contentsOf: copied), try Data(contentsOf: packageURL), "The package is copied into the project")
@@ -108,13 +108,13 @@ final class InstallerTests: XCTestCase {
         var (document, appID) = makeDocumentWithBundledApp()
         document.attachInstaller(PendingInstaller(sourceURL: packageURL, inspection: try InstallerImporter.inspect(at: packageURL)), toApplication: appID)
 
-        let projectURL = directory.appendingPathComponent("Test.enrollmentproject", isDirectory: true)
+        let projectURL = directory.appendingPathComponent("Test.ebsproject", isDirectory: true)
         try document.makeFileWrapper(existing: nil).write(to: projectURL, options: .atomic, originalContentsURL: nil)
         try FileManager.default.removeItem(at: packageURL)
 
         document.project.settings.projectName = "Edited after the original was deleted"
         let saved = try document.makeFileWrapper(existing: try FileWrapper(url: projectURL, options: .immediate))
-        let resaved = directory.appendingPathComponent("Resaved.enrollmentproject", isDirectory: true)
+        let resaved = directory.appendingPathComponent("Resaved.ebsproject", isDirectory: true)
         try saved.write(to: resaved, options: .atomic, originalContentsURL: nil)
         XCTAssertEqual(try Data(contentsOf: resaved.appendingPathComponent("Installers/Example-Tool.pkg")), original)
     }

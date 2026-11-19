@@ -58,7 +58,7 @@ EnrollmentBundleStudio/
                   Live preview and simulation controls                                [3]
                   Package Builder, Build History                                      [4]
 EnrollmentBundleStudioTests/                                                          [1-4]
-SampleProjects/Contoso.enrollmentproject                                              [1]
+SampleProjects/Contoso.ebsproject                                              [1]
 docs/                                                                                 [1-4]
 ```
 

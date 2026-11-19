@@ -41,7 +41,7 @@ Tests cover script inspection and import, hashing, dependency ordering and cycle
 ## Try it
 
 - **File > New** creates a project with Company Portal in a required group and a hidden final validation task.
-- **File > Open** `SampleProjects/Contoso.enrollmentproject` for a fuller example with a summary group, a hidden app, a logo and a script.
+- **File > Open** `SampleProjects/Contoso.ebsproject` for a fuller example with a summary group, a hidden app, a logo and a script.
 - **Scripts** imports `.sh` and `.zsh` files and shows checks, an optional ShellCheck run and a read-only preview. Scripts are never executed by the app.
 - **Execution** shows the resolved run order. Double-click a task to edit order, parallel group and dependencies.
 - **Validation** lists errors, warnings and information; errors will block exporting and building.
@@ -57,7 +57,7 @@ Keyboard shortcuts: ⌘1 to ⌘0 switch sidebar sections; ⇧⌘A opens the cata
 
 ## Project format
 
-Projects are folders with the `.enrollmentproject` extension containing a readable `project.json` and plain image and script files. Details are in `docs/PROJECT_FORMAT.md`.
+Projects are folders with the `.ebsproject` extension containing a readable `project.json` and plain image and script files. Details are in `docs/PROJECT_FORMAT.md`.
 
 ## Before internal distribution
 

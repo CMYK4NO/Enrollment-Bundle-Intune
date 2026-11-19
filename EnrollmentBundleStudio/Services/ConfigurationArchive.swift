@@ -31,7 +31,7 @@ struct ConfigurationImportResult {
 enum ConfigurationArchive {
     static let formatIdentifier = "com.example.enrollmentbundlestudio.configuration"
     static let currentFormatVersion = 1
-    static let fileExtension = "enrollmentconfig"
+    static let fileExtension = "ebsconfig"
     static let maximumArchiveBytes = 64 * 1024 * 1024
 
     // MARK: Export
@@ -75,7 +75,7 @@ enum ConfigurationArchive {
     }
 
     /// Builds an import result from a project package the administrator picked in the import panel, so an
-    /// `.enrollmentproject` can be imported as a new project just like an exported configuration.
+    /// `.ebsproject` can be imported as a new project just like an exported configuration.
     /// Installer packages are not carried over; their references are cleared with a warning.
     static func importResult(from document: EnrollmentProjectDocument, now: Date = Date()) throws -> ConfigurationImportResult {
         if document.isReadOnly {

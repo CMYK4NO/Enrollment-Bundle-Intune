@@ -135,7 +135,7 @@ struct OverviewView: View {
                     Button("Import Configuration…") { workspace.request(.importConfiguration) }
                     Button("Duplicate as New Project…") { workspace.request(.duplicateProject) }
                 }
-                Text("An export is one readable .enrollmentconfig file with project.json, the referenced icons and scripts, and their SHA-256 hashes. Duplicate as New Project assigns a new project ID; File > Duplicate keeps the same ID, which devices use to track enrollment state.")
+                Text("An export is one readable .ebsconfig file with project.json, the referenced icons and scripts, and their SHA-256 hashes. Duplicate as New Project assigns a new project ID; File > Duplicate keeps the same ID, which devices use to track enrollment state.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

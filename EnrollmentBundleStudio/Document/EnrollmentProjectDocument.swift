@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// A .enrollmentproject directory package.
+/// A .ebsproject directory package.
 ///
 /// `project` mirrors project.json. `assets` holds the files of the managed folders (Branding, Icons,
 /// Scripts) keyed by relative path, so imported files live inside the project instead of being fragile

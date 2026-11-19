@@ -29,7 +29,7 @@ final class DocumentPackageTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let packageURL = directory.appendingPathComponent("Test.enrollmentproject", isDirectory: true)
+        let packageURL = directory.appendingPathComponent("Test.ebsproject", isDirectory: true)
 
         let document = EnrollmentProjectDocument(project: TestSupport.makeProject())
         let wrapper = try document.makeFileWrapper(existing: nil)

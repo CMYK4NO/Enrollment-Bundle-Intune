@@ -72,7 +72,7 @@ struct ProjectTransferModifier: ViewModifier {
     private func importConfiguration() {
         Task {
             // Project packages are accepted too. The extension type is added in case the system has not
-            // registered the project type yet, so the panel never greys out a .enrollmentproject.
+            // registered the project type yet, so the panel never greys out a .ebsproject.
             var types: [UTType] = [.enrollmentConfiguration, .json, .enrollmentProject]
             if let byExtension = UTType(filenameExtension: ProjectLayout.fileExtension), !types.contains(byExtension) {
                 types.append(byExtension)

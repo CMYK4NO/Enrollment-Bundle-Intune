@@ -73,7 +73,7 @@ To add a schema version: raise `AppInfo.currentSchemaVersion`, add a step to `Pr
 
 ## Export, import and duplicates
 
-- **Export Configuration** (⌥⌘E) writes a single `.enrollmentconfig` JSON file with the project and referenced files, each with SHA-256 and size. See `PROJECT_FORMAT.md`.
+- **Export Configuration** (⌥⌘E) writes a single `.ebsconfig` JSON file with the project and referenced files, each with SHA-256 and size. See `PROJECT_FORMAT.md`.
 - **Import Configuration** (⌥⌘I) validates everything, shows a review sheet, and saves the result as a new project, which then opens. A new project ID is assigned by default.
 - **Duplicate as New Project** saves a copy with a new project ID. The standard File > Duplicate keeps the same ID; devices track enrollment state per project ID, so use the new command for real copies.
 

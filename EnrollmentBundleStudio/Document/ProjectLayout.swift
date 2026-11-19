@@ -1,8 +1,8 @@
 import Foundation
 
-/// Folder and file names inside a .enrollmentproject package.
+/// Folder and file names inside a .ebsproject package.
 enum ProjectLayout {
-    static let fileExtension = "enrollmentproject"
+    static let fileExtension = "ebsproject"
     static let projectFileName = "project.json"
 
     static let brandingDirectory = "Branding"

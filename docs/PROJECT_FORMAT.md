@@ -1,9 +1,9 @@
 # Project file format (schema version 4)
 
-A project is a folder with the extension `.enrollmentproject`. Finder shows it as one document because the type conforms to `com.apple.package`; in Terminal it is an ordinary folder. Use Show Package Contents in Finder to inspect it.
+A project is a folder with the extension `.ebsproject`. Finder shows it as one document because the type conforms to `com.apple.package`; in Terminal it is an ordinary folder. Use Show Package Contents in Finder to inspect it.
 
 ```
-MyEnrollment.enrollmentproject/
+MyEnrollment.ebsproject/
   project.json      all settings, pretty-printed, keys sorted
   Branding/         CompanyLogo.<ext>, Banner.<ext>
   Icons/            custom application icons
@@ -82,7 +82,7 @@ Absent when the project never configured a Dock. `isEnabled`, `removeDefaultItem
 | 3 | Applications gain an optional `installer` package reference (Phase 2 update). |
 | 4 | Settings gain `onboardingFlagPath` and `enrollmentWindowHours` (onboarding guard). |
 
-## Configuration export (.enrollmentconfig)
+## Configuration export (.ebsconfig)
 
 One pretty-printed JSON file, type `com.example.enrollmentbundlestudio.configuration`:
 

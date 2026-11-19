@@ -7,7 +7,7 @@ final class SampleProjectTests: XCTestCase {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("SampleProjects/Contoso.enrollmentproject", isDirectory: true)
+            .appendingPathComponent("SampleProjects/Contoso.ebsproject", isDirectory: true)
     }
 
     func testSampleProjectOpensWithoutNotes() throws {
