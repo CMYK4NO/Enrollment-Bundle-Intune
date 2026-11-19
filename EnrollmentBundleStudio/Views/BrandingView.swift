@@ -20,6 +20,22 @@ struct BrandingView: View {
                 TextField("Button text while in progress", text: $document.project.branding.inProgressButtonText)
             }
 
+            Section("Completion button action") {
+                TextField(
+                    "Command to run after the button is clicked",
+                    text: $document.project.branding.completionCommand,
+                    prompt: Text(verbatim: "Leave empty to run nothing"),
+                    axis: .vertical
+                )
+                    .lineLimit(1...4)
+                    .font(.system(.body, design: .monospaced))
+                    .accessibilityLabel("Completion command")
+                Toggle("Run as the logged-in user", isOn: $document.project.branding.completionCommandRunsAsUser.deferringWrites())
+                Text("Optional. Runs once on the Mac after the user clicks the completion button, for example: open -a \"Company Portal\". It runs only after a successful or warning outcome, is limited to 60 seconds, and never runs in previews or dry runs. Turn the toggle off to run it as root.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Messages") {
                 PlaceholderTextField(title: "Welcome message", text: $document.project.branding.welcomeMessage, multiline: true)
                 PlaceholderTextField(title: "Completion message", text: $document.project.branding.completionMessage, multiline: true)
@@ -68,6 +84,20 @@ struct BrandingView: View {
                         FieldIssueLabel(message: "Unknown SF Symbol name.", severity: .warning)
                     }
                 }
+            }
+
+            Section("Desktop wallpaper") {
+                ImageAssetRow(
+                    title: BrandingImageRole.wallpaper.title,
+                    path: document.project.branding.wallpaperPath,
+                    data: document.assetData(at: document.project.branding.wallpaperPath),
+                    recommendation: "Optional. PNG or JPEG at the resolution of your Macs' displays (for example 3840 × 2160), up to 50 MB.",
+                    onChoose: { chooseImage(for: .wallpaper) },
+                    onRemove: { document.removeBrandingImage(.wallpaper) }
+                )
+                Text("The wallpaper is applied once on each Mac, after the user signs in. People can change it afterwards and it is not applied again, unless you ship a different image in a later version.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Window") {
@@ -132,11 +162,15 @@ struct BrandingView: View {
 
     private func chooseImage(for role: BrandingImageRole) {
         Task {
-            let urls = await FilePanels.openFiles(title: "Choose the \(role.title)", allowedContentTypes: AssetImporter.allowedImageTypes)
+            let isWallpaper = role == .wallpaper
+            let urls = await FilePanels.openFiles(
+                title: "Choose the \(role.title)",
+                allowedContentTypes: isWallpaper ? AssetImporter.allowedWallpaperTypes : AssetImporter.allowedImageTypes
+            )
             guard let url = urls.first else { return }
             do {
-                let data = try AssetImporter.readFile(at: url)
-                let format = try AssetImporter.validateImage(data)
+                let data = try AssetImporter.readFile(at: url, maximumBytes: isWallpaper ? AssetImporter.maximumWallpaperBytes : AssetImporter.maximumImageBytes)
+                let format = try (isWallpaper ? AssetImporter.validateWallpaper(data) : AssetImporter.validateImage(data))
                 let path = AssetImporter.brandingPath(role: role, format: format)
                 var updated = document
                 try updated.replaceBrandingImage(role, data: data, path: path)

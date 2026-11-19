@@ -2,6 +2,16 @@ import XCTest
 @testable import EnrollmentBundleStudio
 
 final class ScriptImporterTests: XCTestCase {
+    func testImportedScriptsAreHiddenFromTheEnrollmentListByDefault() throws {
+        let document = try TestSupport.makeProjectWithScript()
+        let script = try XCTUnwrap(document.project.scripts.first)
+        XCTAssertFalse(script.execution.isVisible)
+        XCTAssertFalse(script.execution.isRequired)
+        let state = PreviewBuilder.makeState(project: document.project, scenario: .initial, overrides: [:])
+        XCTAssertFalse(state.displayItems.contains { $0.id == script.taskIdentifier })
+        XCTAssertTrue(state.evaluationItems.contains { $0.id == script.taskIdentifier }, "It still runs")
+    }
+
     func testSHA256MatchesKnownVectors() {
         XCTAssertEqual(Hashing.sha256Hex(Data()), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
         XCTAssertEqual(Hashing.sha256Hex(Data("abc".utf8)), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")

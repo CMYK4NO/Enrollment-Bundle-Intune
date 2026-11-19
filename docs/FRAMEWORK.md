@@ -43,7 +43,7 @@ README.txt
 | Application, Wait for Intune | Polls the detection rule every 10 s until it passes or the timeout ends (timed out). |
 | Application, Detection only | Checks once: complete or failed. |
 | Application, Run bundled installer | Complete if already detected. Otherwise verifies the package's SHA-256, runs `installer -pkg … -target /` with timeout and retries, then detects again. |
-| Application, Run custom script | Not linked yet; detected like Wait for Intune. |
+| Application, Run custom script | Complete if already detected. Otherwise runs the linked script (as root or user, with timeout, retries and the script's success codes), then detects the app, waiting up to the timeout. With no linked script it is detected like Wait for Intune. |
 | Script | Runs as root or as the console user (`launchctl asuser … sudo -u`); complete when the exit code is in the success list; retries; timeout. Output goes to the log. |
 | Intune synchronization | Waits for the Intune agent, then runs the optional command; a failing command gives Complete with warnings. |
 | Wait condition | Polls the command until it exits 0, or times out. |
@@ -90,16 +90,20 @@ The state directory (project setting, mode 700, root) holds `project.id`, `bundl
 
 `--dry-run` wins over `--preview`. Unknown arguments are logged with `log_error` and exit 1. `uninstall.sh` supports `--dry-run` and `--help`; it refuses to remove shallow or system paths.
 
-## Logging and results (Intune script standard)
+## Dock
 
-- `appname="onBoarding"`, logs in `/Library/Logs/Microsoft/IntuneScripts/onBoarding/`, one file per run (`onBoarding_YYYYMMDD-HHMMSS.log`), newest 10 kept. Directory root:wheel 755; log files 600 because they contain the console user name.
+When the project enables the Dock, `config/enrollment.conf` carries `dock_enabled`, `dock_remove_default`, `dock_position`, `dock_tile_size`, `dock_autohide`, `dock_fingerprint`, `dock_item_count` and `dock_item_N_label` / `dock_item_N_path`. `apply_dock` (in `lib/user.sh`) runs after the tasks when the outcome is `success` or `warnings`, before the final dialog message. It skips apps that are not installed, writes `persistent-apps`, `orientation`, `tilesize` and `autohide` as the console user, restarts the Dock, and stores the fingerprint in `state/dock.applied` so the Dock is set up once per configuration. It is never fatal.
+
+## Logging and results
+
+- `appname="onBoarding"`, logs in `/Library/Logs/Microsoft/IntuneScripts/onBoarding/`, one file per run (`onBoarding_YYYYMMDD-HHMMSS.log`), newest 10 kept. Directory root:wheel 755; log files 644 so the logged-in user can read them.
 - Every line is timestamped. Messages appear on stderr only in a terminal. `log_error` adds one line to stderr when not in a terminal, so Intune and launchd capture failures.
 - stdout carries exactly one line at the end: `STATUS: message | key=value`, with STATUS one of SUCCESS, FAILED, SKIPPED, DEFERRED, DRY-RUN, PREVIEW.
 - Exit 0 for success or nothing to do; exit 1 for failure, interruption or deferral.
 
 ## swiftDialog requirements
 
-- Installed at the project's swiftDialog path (default `/usr/local/bin/dialog`) at or above the project's minimum version (default 2.5.0). **A normal run installs or updates it automatically**: `lib/dialog.sh` reads the latest release from `https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest`, downloads the `.pkg` (only from `https://github.com/swiftDialog/swiftDialog/releases/download/`), checks with `pkgutil --check-signature` that it is signed by team `PWA5E9TQ59`, and runs `installer`. It tries three times and never fails the run. `--dry-run` and `--preview` never install it, and neither does the app's Live Preview. Devices need HTTPS access to `api.github.com` and `github.com`; if they are blocked, deploy swiftDialog with Intune instead, as the framework still waits up to 10 minutes for it.
+- Installed at the project's swiftDialog path (default `/usr/local/bin/dialog`) at or above the project's minimum version (default 2.5.0). **A normal run installs or updates it automatically**: `lib/dialog.sh` reads the latest release from `https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest` (when the API fails, for example because of its per-address rate limit, it reads the release page `https://github.com/swiftDialog/swiftDialog/releases/latest` instead), downloads the `.pkg` (only from `https://github.com/swiftDialog/swiftDialog/releases/download/`), checks with `pkgutil --check-signature` that macOS trusts the signature (`Status: signed by a developer certificate issued by Apple`) and that it is signed by team `PWA5E9TQ59`, and runs `installer`. It tries three times and never fails the run. `--dry-run` and `--preview` never install it, and neither does the app's Live Preview. Devices need HTTPS access to `api.github.com` and `github.com`; if they are blocked, deploy swiftDialog with Intune instead, as the framework still waits up to 10 minutes for it.
 - If swiftDialog is missing or too old, tasks still run and the problem is logged; users simply see no window.
 - Statuses map to swiftDialog list states: waiting and running → `wait`, complete → `success`, complete with warnings → `error`, failed and timed out → `fail`, pending and skipped → `pending`.
 
@@ -124,7 +128,7 @@ sudo "$INSTALL/enrollment.sh" --dry-run
 sudo "$INSTALL/enrollment.sh" --preview
 ```
 
-Read the newest log with `sudo ls -t /Library/Logs/Microsoft/IntuneScripts/onBoarding/` and `sudo cat` (logs are root-only, mode 600). Remove the test copy with `sudo "$INSTALL/uninstall.sh"`. A full run (`sudo "$INSTALL/enrollment.sh"`) installs bundled packages and runs scripts, so use a test Mac.
+Read the newest log with `sudo ls -t /Library/Logs/Microsoft/IntuneScripts/onBoarding/` and `cat` (logs are readable by every user, mode 644). Remove the test copy with `sudo "$INSTALL/uninstall.sh"`. A full run (`sudo "$INSTALL/enrollment.sh"`) installs bundled packages and runs scripts, so use a test Mac.
 
 The dialog finds its logo, banner and icons relative to the folder it runs from, so a copy in another location still shows them. The log warns when that folder differs from the configured install location, because the LaunchDaemon and `uninstall.sh` use the configured one.
 
@@ -139,3 +143,9 @@ The dialog finds its logo, banner and icons relative to the folder it runs from,
 | Run repeats at every boot | The outcome was FAILED or DEFERRED; the LaunchDaemon stays until success. Read `completion` and `tasks/*.status` in the state directory. |
 | Want to start over | `sudo …/enrollment.sh --force`, or raise the version in Overview and redeploy. |
 | `Another enrollment run is active` | A run is in progress. A lock from a dead process is cleared automatically. |
+
+## Folder and process safety
+
+- **Install location and state directory** must be dedicated folders at least three levels deep (for example `/Library/Application Support/Contoso/Enrollment`). The app reports an error for `/`, `/Library`, `/Users` and similar, because the postinstall script changes ownership and permissions recursively. The postinstall script and `state_init` refuse the same paths on the Mac, and `uninstall.sh` uses the same check before removing anything.
+- **Timeouts** stop the whole process tree of a task (children, grandchildren and so on), not only its direct children, so a timed-out user-context script cannot keep running in the background.
+- **Importing a project** (configuration file or `.enrollmentproject`) shows a warning that lists the scripts, detection and validation commands and the completion command it contains, because they run on enrolled Macs, most of them as root. Review them before building.

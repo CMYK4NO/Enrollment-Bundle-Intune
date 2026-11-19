@@ -64,6 +64,67 @@ enum ConfigurationArchive {
 
     // MARK: Import
 
+    /// Imported projects can carry commands and scripts that run as root on every Mac the package reaches.
+    /// This notice makes sure the administrator knows to read them before building.
+    private static func commandNotice(for project: EnrollmentProject) -> ConfigurationImportIssue? {
+        guard let summary = project.commandSummary else { return nil }
+        return ConfigurationImportIssue(
+            severity: .warning,
+            message: "This project contains \(summary) that will run on enrolled Macs, most of them as root. Review them in Scripts, Applications and Branding before building a package, and import only projects you trust."
+        )
+    }
+
+    /// Builds an import result from a project package the administrator picked in the import panel, so an
+    /// `.enrollmentproject` can be imported as a new project just like an exported configuration.
+    /// Installer packages are not carried over; their references are cleared with a warning.
+    static func importResult(from document: EnrollmentProjectDocument, now: Date = Date()) throws -> ConfigurationImportResult {
+        if document.isReadOnly {
+            throw ProjectFileError.newerSchemaUnreadable(document.project.schemaVersion)
+        }
+        var project = document.project
+        var issues: [ConfigurationImportIssue] = []
+        for groupIndex in project.applicationGroups.indices {
+            for itemIndex in project.applicationGroups[groupIndex].applications.indices {
+                if let installer = project.applicationGroups[groupIndex].applications[itemIndex].installer {
+                    let name = project.applicationGroups[groupIndex].applications[itemIndex].displayName
+                    project.applicationGroups[groupIndex].applications[itemIndex].installer = nil
+                    issues.append(ConfigurationImportIssue(
+                        severity: .warning,
+                        message: "\(name) used the installer package \(installer.originalFilename), which imports do not carry. Attach it again after import."
+                    ))
+                }
+            }
+        }
+        for script in project.scripts {
+            if let data = document.assets[script.relativePath], Hashing.sha256Hex(data) != script.sha256 {
+                issues.append(ConfigurationImportIssue(
+                    severity: .error,
+                    message: "Script \(script.displayName) does not match the hash recorded in the project."
+                ))
+            }
+        }
+        if let notice = commandNotice(for: project) {
+            issues.append(notice)
+        }
+        for note in document.loadNotes {
+            issues.append(ConfigurationImportIssue(severity: .information, message: note))
+        }
+        for summary in document.migrationSummary {
+            issues.append(ConfigurationImportIssue(severity: .information, message: summary))
+        }
+        let referenced = project.referencedAssetPaths
+        let assets = document.assets.filter { referenced.contains($0.key) }
+        return ConfigurationImportResult(
+            project: project,
+            assets: assets,
+            issues: issues,
+            exportedAt: ISO8601DateFormatter().string(from: ProjectCoding.wholeSeconds(now)),
+            sourceApplicationVersion: project.applicationVersion,
+            sourceSchemaVersion: document.migratedFromVersion ?? project.schemaVersion,
+            migrationSummary: document.migrationSummary
+        )
+    }
+
     /// Parses and validates an archive. Nothing in it is trusted: paths, hashes, sizes, images,
     /// identifiers and schema are all checked. Throws only when the file is not an archive at all.
     static func parse(_ data: Data) throws -> ConfigurationImportResult {
@@ -170,6 +231,9 @@ enum ConfigurationArchive {
             if case .duplicateIdentifier(let id) = issue {
                 add(.error, "More than one task uses the identifier \(id).")
             }
+        }
+        if let notice = commandNotice(for: project) {
+            issues.append(notice)
         }
         for summary in loaded.migrationSummary {
             add(.information, summary)

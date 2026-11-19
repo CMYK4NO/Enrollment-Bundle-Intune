@@ -43,6 +43,7 @@ enum ValidationArea: String, CaseIterable {
     case applications
     case scripts
     case execution
+    case dock
     case environment
 }
 

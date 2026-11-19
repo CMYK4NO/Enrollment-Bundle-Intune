@@ -14,6 +14,8 @@ Enrollment Bundle Studio treats five activities as separate, and the Scripts pag
 
 Import accepts `.sh` and `.zsh` files up to 1 MB that are UTF-8 text. Files with an unusable interpreter are still imported so you can see the problem; validation then reports an error that blocks building until you replace the file.
 
+An imported script is **hidden from the enrollment list by default**: it still runs, in the background, but users do not see a row for it. Turn on "Show in the enrollment list" in the script's editor (or the Execution page) to show it. Scripts imported by earlier versions keep the setting they have.
+
 If a script file is edited in Finder after import, its hash no longer matches and validation reports an error. Review the file, then choose **Accept Current File**. This keeps an unreviewed change from shipping silently.
 
 ### Built-in checks
@@ -31,6 +33,8 @@ If ShellCheck exists at `/opt/homebrew/bin/shellcheck` or `/usr/local/bin/shellc
 
 ## Execution and dependencies
 
+An application with the "Run custom script" strategy runs its linked script as part of its own task. The script then has no row of its own in Execution or in the dialog; the application row shows the whole result. The task uses the application's order, required state, visibility, timeout and messages. Retries are the larger of the two, the user context applies if either asks for it, and the script's own dependencies are added. Other tasks that depended on the script now depend on the application. Scripts that no application links still run as separate tasks.
+
 The task planner flattens applications, scripts and system tasks into one plan. Final validation implicitly depends on every enabled required task. The dependency graph then reports, and the Validation page lists:
 
 | Problem | Severity |
@@ -44,6 +48,8 @@ The task planner flattens applications, scripts and system tasks into one plan. 
 | Task shares a parallel group with its dependency | Warning |
 
 Run order is a stable topological sort by dependencies, then execution order, then position. Consecutive tasks with the same parallel group and no dependency between them form a batch that may run together. Removing an application, group, script or system task automatically removes references to it from other tasks.
+
+**Reordering.** On the Execution page, select a row and use Move Up or Move Down (buttons, the context menu, ⌥⌘↑ and ⌥⌘↓). The execution orders of all enabled tasks are renumbered in the new sequence (100, 110, 120, … with final validation keeping at least its own order), so the Order column always matches the run order. A task never leaves its dependencies behind: moving it up also moves the rows directly above it that it depends on, and moving it down also moves the rows directly below it that depend on it. Moves are refused while the plan has dependency cycles or duplicate identifiers, and for disabled tasks. Undo with Edit > Undo.
 
 ## Validation engine
 

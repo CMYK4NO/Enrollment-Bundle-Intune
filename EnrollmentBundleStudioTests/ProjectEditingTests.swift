@@ -149,6 +149,71 @@ final class LinkedScriptTests: XCTestCase {
         XCTAssertEqual(planned?.implicitDependencies, ["script.setup"])
     }
 
+    private func documentWithLinkedApp() throws -> (EnrollmentProjectDocument, String, String) {
+        var document = try TestSupport.makeProjectWithScript()
+        let scriptID = try XCTUnwrap(document.project.scripts.first).taskIdentifier
+        var app = ApplicationItem.makeCustom(strategy: .customScript, timeoutSeconds: 900)
+        app.taskIdentifier = "app.linked"
+        app.displayName = "Linked"
+        app.customScriptTaskIdentifier = scriptID
+        document.project.applicationGroups[0].applications.append(app)
+        return (document, scriptID, "app.linked")
+    }
+
+    func testLinkedScriptHasNoRowOfItsOwn() throws {
+        let (document, scriptID, appID) = try documentWithLinkedApp()
+        let plan = TaskPlanner.plan(document.project)
+        XCTAssertNil(plan.first { $0.taskIdentifier == scriptID })
+        let planned = try XCTUnwrap(plan.first { $0.taskIdentifier == appID })
+        XCTAssertEqual(planned.type, .shellScript)
+        XCTAssertEqual(planned.implicitDependencies, [])
+    }
+
+    func testDependenciesOnAFoldedScriptPointAtTheApp() throws {
+        var (document, scriptID, appID) = try documentWithLinkedApp()
+        var other = ApplicationItem.makeCustom(strategy: .waitForIntune, timeoutSeconds: 900)
+        other.taskIdentifier = "app.other"
+        other.displayName = "Other"
+        other.execution.dependencies = [scriptID]
+        document.project.applicationGroups[0].applications.append(other)
+        let planned = try XCTUnwrap(TaskPlanner.plan(document.project).first { $0.taskIdentifier == "app.other" })
+        XCTAssertEqual(planned.execution.dependencies, [appID])
+    }
+
+    func testDisabledAppDoesNotHideItsScript() throws {
+        var (document, scriptID, _) = try documentWithLinkedApp()
+        let index = try XCTUnwrap(document.project.applicationGroups[0].applications.firstIndex { $0.taskIdentifier == "app.linked" })
+        document.project.applicationGroups[0].applications[index].isEnabled = false
+        XCTAssertNotNil(TaskPlanner.plan(document.project).first { $0.taskIdentifier == scriptID })
+    }
+
+    func testLinkedScriptIsHiddenFromThePreviewList() throws {
+        let (document, scriptID, appID) = try documentWithLinkedApp()
+        let state = PreviewBuilder.makeState(project: document.project, scenario: .allComplete, overrides: [:])
+        XCTAssertFalse(state.evaluationItems.contains { $0.id == scriptID })
+        XCTAssertTrue(state.displayItems.contains { $0.id == appID })
+        XCTAssertFalse(state.displayItems.contains { $0.id == scriptID })
+    }
+
+    func testScriptWithoutLinkIsDetectedOnly() {
+        XCTAssertEqual(TaskPlanner.taskType(for: .customScript, hasLinkedScript: false), .applicationDetection)
+        XCTAssertEqual(TaskPlanner.taskType(for: .customScript, hasLinkedScript: true), .shellScript)
+    }
+
+    func testGeneratorRunsTheLinkedScriptInsideTheAppTask() throws {
+        let (document, scriptID, appID) = try documentWithLinkedApp()
+        let framework = try FrameworkGenerator.generate(project: document.project, assets: document.assets, installerSources: document.installerSources)
+        let files = framework.files.filter { $0.path.hasPrefix("framework/tasks/") }
+        XCTAssertNil(files.first { $0.path.hasSuffix("-\(scriptID).sh") })
+        let file = try XCTUnwrap(files.first { $0.path.hasSuffix("-\(appID).sh") })
+        let values = try ShellLiteralReader.assignments(in: String(decoding: file.contents, as: UTF8.self))
+        XCTAssertEqual(values["TASK_TYPE"], "applicationDetection")
+        XCTAssertEqual(values["TASK_STRATEGY"], "customScript")
+        XCTAssertEqual(values["TASK_SCRIPT"], "scripts/CheckExample.sh")
+        XCTAssertEqual(values["TASK_SUCCESS_CODES"], "0")
+        XCTAssertTrue(framework.files.contains { $0.path == "framework/scripts/CheckExample.sh" })
+    }
+
     func testOtherStrategiesIgnoreALeftoverLink() {
         var app = ApplicationItem.makeCustom(strategy: .waitForIntune, timeoutSeconds: 900)
         app.taskIdentifier = "app.other"

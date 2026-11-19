@@ -35,6 +35,13 @@ enum ProjectMigrator {
             object["branding"] = branding
             changed = true
         }
+        if var branding = object["branding"] as? [String: Any],
+           branding["completionCommand"] == nil || branding["completionCommandRunsAsUser"] == nil {
+            if branding["completionCommand"] == nil { branding["completionCommand"] = "" }
+            if branding["completionCommandRunsAsUser"] == nil { branding["completionCommandRunsAsUser"] = true }
+            object["branding"] = branding
+            changed = true
+        }
         guard changed else { return data }
         return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? data
     }

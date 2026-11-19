@@ -7,6 +7,9 @@ struct ContentView: View {
     @StateObject private var workspace = WorkspaceViewModel()
     /// Owned here as @State: List(selection:) may write during a view update, which is safe for @State.
     @State private var selection: SidebarSection? = .overview
+    @State private var lastContentSelection: SidebarSection? = .overview
+    @State private var settingsID = UUID()
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let report = ValidationEngine.validate(project: document.project, assets: document.assets, environment: .live(),
@@ -28,6 +31,35 @@ struct ContentView: View {
                 .frame(minWidth: 620, minHeight: 480)
         }
         .focusedSceneValue(\.workspace, workspace)
+        .focusedSceneValue(
+            \.settingsContext,
+            SettingsContext(
+                id: settingsID,
+                projectName: document.project.settings.projectName,
+                isReadOnly: document.isReadOnly,
+                document: $document
+            )
+        )
+        .onChange(of: selection) { newValue in
+            // Settings has no sidebar page any more: links to it (for example from Validation) open its window.
+            if newValue == .settings {
+                selection = lastContentSelection
+                SettingsWindowModel.shared.show(
+                    SettingsContext(
+                        id: settingsID,
+                        projectName: document.project.settings.projectName,
+                        isReadOnly: document.isReadOnly,
+                        document: $document
+                    )
+                )
+                openWindow(id: SettingsWindow.id)
+            } else {
+                lastContentSelection = newValue
+            }
+        }
+        .onDisappear {
+            SettingsWindowModel.shared.clear(id: settingsID)
+        }
         .task(id: workspace.navigationRequestID) {
             if let section = workspace.consumeNavigation() {
                 selection = section
@@ -84,12 +116,15 @@ struct ContentView: View {
             ScriptsView(document: $document, workspace: workspace, shellCheckURL: ShellCheckService.locate())
         case .execution:
             ExecutionView(document: $document, workspace: workspace)
+        case .dock:
+            DockView(document: $document, workspace: workspace)
         case .preview:
             PreviewView(document: document, workspace: workspace)
         case .validation:
             ValidationView(report: report, selection: $selection)
         case .settings:
-            ProjectSettingsView(document: $document)
+            // Settings open in their own window (see the selection handling above); there is no page.
+            EmptyView()
         case .packageBuilder:
             PackageBuilderView(document: $document, report: report, workspace: workspace)
         case .buildHistory:

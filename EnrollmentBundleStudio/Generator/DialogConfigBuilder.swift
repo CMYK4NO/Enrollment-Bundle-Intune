@@ -33,6 +33,21 @@ enum DialogConfigBuilder {
         }
     }
 
+    /// Markdown joins lines that follow each other into one paragraph, so every line of the text is ended with two
+    /// spaces, which markdown renders as a line break. Blank lines (paragraph breaks) are left as they are.
+    static func markdownLineBreaks(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        var result = ""
+        for (index, line) in lines.enumerated() {
+            result += line
+            guard index < lines.count - 1 else { break }
+            let nextIsBlank = lines[index + 1].trimmingCharacters(in: .whitespaces).isEmpty
+            let isBlank = line.trimmingCharacters(in: .whitespaces).isEmpty
+            result += (isBlank || nextIsBlank || line.hasSuffix("  ")) ? "\n" : "  \n"
+        }
+        return result
+    }
+
     /// The JSON object for swiftDialog's --jsonfile.
     /// - Parameters:
     ///   - resolve: applied to every user-facing text (normalizes tokens for the device, or resolves them for previews).
@@ -77,7 +92,7 @@ enum DialogConfigBuilder {
             configuration["overlayicon"] = overlayIconPath
         }
         if branding.showDeviceInfo && !branding.infoboxTemplate.isEmpty {
-            configuration["infobox"] = resolve(branding.infoboxTemplate)
+            configuration["infobox"] = markdownLineBreaks(resolve(branding.infoboxTemplate))
         }
         var help: [String] = []
         if !branding.supportContact.isEmpty { help.append(resolve(branding.supportContact)) }

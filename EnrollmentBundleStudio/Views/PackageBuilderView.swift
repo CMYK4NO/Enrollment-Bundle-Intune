@@ -59,8 +59,9 @@ struct PackageBuilderView: View {
                     identifier: lastBuild.verification.identifier,
                     version: lastBuild.verification.version,
                     minimumMacOS: document.project.settings.minimumMacOSVersion,
-                    displayName: document.project.settings.packageDisplayName,
-                    publisher: document.project.settings.organizationName
+                    displayName: document.project.settings.projectName,
+                    publisher: document.project.settings.organizationName,
+                    preInstallScript: FrameworkGenerator.intunePreInstallScript(project: document.project)
                 )
             }
         }

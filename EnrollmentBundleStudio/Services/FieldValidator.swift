@@ -68,4 +68,42 @@ enum FieldValidator {
         guard !value.split(separator: "/").contains("..") else { return "The path must not contain \"..\"." }
         return nil
     }
+
+    /// Device folder that the generated package changes recursively (install location, state directory).
+    /// Stricter than `absolutePathIssue`: a system folder such as /Library or /Users would have its ownership and
+    /// permissions rewritten on every Mac, so at least three path components are required and "//" and control
+    /// characters are refused. The generated postinstall script and state_init apply the same rule on the device.
+    static func deviceDirectoryIssue(_ value: String) -> String? {
+        if let issue = absolutePathIssue(value) { return issue }
+        guard !value.contains("//"), !value.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7F }) else {
+            return "The path must not contain \"//\" or control characters."
+        }
+        let trimmed = value.hasSuffix("/") ? String(value.dropLast()) : value
+        guard trimmed.split(separator: "/").count >= 3 else {
+            return "Use a dedicated folder at least three levels deep, for example /Library/Application Support/Company/Enrollment."
+        }
+        return nil
+    }
+
+    /// Folder that holds the detection placeholder app. Empty means "the install location". Only one app bundle is
+    /// placed there and nothing in it is changed recursively, so a folder such as /Applications is fine; system
+    /// locations and the root are not.
+    static func detectionDirectoryIssue(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        if let issue = absolutePathIssue(trimmed) { return issue }
+        guard !trimmed.contains("//"), !trimmed.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7F }) else {
+            return "The path must not contain \"//\" or control characters."
+        }
+        let normalized = trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
+        let blocked = ["", "/System", "/usr", "/bin", "/sbin", "/private", "/var", "/Library", "/Users", "/Library/LaunchDaemons"]
+        if blocked.contains(normalized) || normalized.hasPrefix("/System/") || normalized.hasPrefix("/usr/")
+            || normalized.hasPrefix("/bin/") || normalized.hasPrefix("/sbin/") {
+            return "Choose a folder such as /Applications or /Library/Application Support/Company; system folders are not allowed."
+        }
+        if normalized.hasSuffix(".app") {
+            return "Enter the folder that will contain the app, not the app itself."
+        }
+        return nil
+    }
 }

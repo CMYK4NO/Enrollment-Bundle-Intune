@@ -80,6 +80,10 @@ struct PackageBuilder {
         try fileManager.createDirectory(at: daemonTarget.deletingLastPathComponent(), withIntermediateDirectories: true)
         try fileManager.moveItem(at: export.appendingPathComponent("launchd/\(plan.launchDaemonLabel).plist"), to: daemonTarget)
         try fileManager.moveItem(at: export.appendingPathComponent("package-scripts"), to: scripts)
+        // The detection placeholder app goes to its device folder (the install location unless configured otherwise).
+        let appTarget = plan.payloadDetectionApp(in: payload)
+        try fileManager.createDirectory(at: appTarget.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.moveItem(at: export.appendingPathComponent("\(FrameworkGenerator.detectionDirectory)/\(plan.detectionApp.name)"), to: appTarget)
 
         progress("Running pkgbuild…")
         let builtPackage = staging.appendingPathComponent("built.pkg")

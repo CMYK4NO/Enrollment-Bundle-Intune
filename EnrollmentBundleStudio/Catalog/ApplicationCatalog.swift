@@ -21,6 +21,7 @@ struct CatalogEntry: Identifiable, Equatable {
     func makeApplicationItem(taskIdentifier: String, strategy: ApplicationInstallStrategy) -> ApplicationItem {
         var execution = TaskExecutionOptions()
         execution.isRequired = defaultRequired
+        execution.executionOrder = TaskExecutionOptions.defaultApplicationOrder
         execution.timeoutSeconds = defaultTimeoutSeconds
         execution.messages = .standard
         return ApplicationItem(

@@ -86,6 +86,22 @@ enum BuildReport {
             lines.append("  \(script.displayName) [\(script.taskIdentifier)]: \(script.relativePath), \(script.interpreter), runs as \(script.execution.context.rawValue), \(requiredText), SHA-256 \(script.sha256)")
         }
 
+        section("Intune detection")
+        let detection = FrameworkGenerator.detectionApp(project: project)
+        lines.append("  Placeholder app \(detection.path), bundle identifier \(settings.packageIdentifier), version \(settings.packageVersion)")
+
+        section("Dock")
+        if let dock = project.dock, dock.isEnabled {
+            let items = dock.resolvedItems(in: project)
+            lines.append("  Set up once after a successful enrollment: \(dock.removeDefaultItems ? "replaces the default items" : "adds to the existing Dock"), position \(dock.position.rawValue), icon size \(dock.tileSize), auto-hide \(dock.autoHide ? "on" : "off")")
+            for item in items {
+                lines.append("  \(item.label): \(item.path)")
+            }
+            if items.isEmpty { lines.append("  No apps") }
+        } else {
+            lines.append("  Not configured")
+        }
+
         section("Tasks")
         lines.append("  Required (\(required.count)): " + (required.isEmpty ? "none" : required.map { $0.taskIdentifier }.joined(separator: ", ")))
         lines.append("  Optional (\(optional.count)): " + (optional.isEmpty ? "none" : optional.map { $0.taskIdentifier }.joined(separator: ", ")))

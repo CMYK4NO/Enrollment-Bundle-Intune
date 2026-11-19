@@ -33,6 +33,13 @@ struct ApplicationEditorSheet: View {
     @State private var pendingInstaller: PendingInstaller?
     @State private var isInspectingInstaller = false
     @State private var importError: String?
+    /// Details read from the chosen package (never from the installed system).
+    @State private var packageMetadata: PackageMetadata?
+    @State private var packageApplication: PackageApplication?
+    @State private var packageNote: String?
+    /// The display name this sheet filled in from the package. It is replaced when another package is chosen,
+    /// but a name the administrator typed or edited is never overwritten.
+    @State private var autoFilledName: String?
 
     init(context: ApplicationEditContext, assets: [String: Data], onSave: @escaping (ApplicationEditResult) -> Void) {
         self.context = context
@@ -45,9 +52,9 @@ struct ApplicationEditorSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                deliverySection
                 identitySection
                 groupSection
-                deliverySection
                 detectionSection
                 behaviorSection
                 iconSection
@@ -178,14 +185,71 @@ struct ApplicationEditorSheet: View {
             Button("Remove") {
                 pendingInstaller = nil
                 draft.installer = nil
+                packageMetadata = nil
+                packageApplication = nil
+                packageNote = nil
             }
             .disabled(shownName == nil || isInspectingInstaller)
         }
-        Text("Flat .pkg files only. The package is copied into the project's Installers folder when you save the project, and it runs on the device during enrollment. It is never opened or installed on this Mac.")
+        packageDetails
+        Text("Flat .pkg files only. The package is copied into the project's Installers folder when you save the project, and it runs on the device during enrollment. It is never installed or run on this Mac; only its small PackageInfo files are read to suggest the application path, bundle identifier and receipt.")
             .font(.caption)
             .foregroundStyle(.secondary)
         if shownName == nil {
             FieldIssueLabel(message: "Choose a package, or this app can never complete.", severity: .warning)
+        }
+    }
+
+    /// What the package says about itself: the application it installs and its installer receipt.
+    @ViewBuilder
+    private var packageDetails: some View {
+        if let packageNote {
+            Text(packageNote)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        if let metadata = packageMetadata {
+            if metadata.applications.count > 1 {
+                Picker("Application in package", selection: Binding(
+                    get: { packageApplication },
+                    set: { if let application = $0 { useApplication(application, overwrite: true) } }
+                )) {
+                    Text("Choose…").tag(PackageApplication?.none)
+                    ForEach(metadata.applications) { application in
+                        Text("\(application.name) (\(application.path))").tag(Optional(application))
+                    }
+                }
+            }
+            if let application = packageApplication {
+                LabeledContent("Path in package") {
+                    Text(application.path).font(.callout.monospaced()).textSelection(.enabled)
+                }
+                if !application.bundleIdentifier.isEmpty {
+                    LabeledContent("Bundle identifier in package") {
+                        Text(application.bundleIdentifier).font(.callout.monospaced()).textSelection(.enabled)
+                    }
+                }
+            }
+            if let receipt = metadata.receiptIdentifier(for: packageApplication) {
+                LabeledContent("Installer receipt") {
+                    Text(receipt).font(.callout.monospaced()).textSelection(.enabled)
+                }
+                if draft.detection.method != .packageReceipt || draft.detection.value != receipt {
+                    Button("Use Receipt for Detection") {
+                        draft.detection.method = .packageReceipt
+                        draft.detection.value = receipt
+                    }
+                }
+            }
+            if let application = packageApplication, packageValuesDiffer(from: application) {
+                FieldIssueLabel(
+                    message: "The application path or bundle identifier above differs from the package.",
+                    severity: .warning
+                )
+                Button("Use Package Values") {
+                    useApplication(application, overwrite: true)
+                }
+            }
         }
     }
 
@@ -211,6 +275,93 @@ struct ApplicationEditorSheet: View {
                 TextField("Process name", text: $draft.processName, prompt: Text("Company Portal"))
             }
         }
+        .onChange(of: draft.detection.method) { _ in
+            fillReceiptIfNeeded()
+        }
+    }
+
+    // MARK: Package details
+
+    /// Fills the application path and bundle identifier from the package. Empty (or placeholder) fields are
+    /// always filled; fields the administrator already set are replaced only when `overwrite` is true.
+    private func useApplication(_ application: PackageApplication, overwrite: Bool) {
+        packageApplication = application
+        defer { fillDisplayNameIfAllowed() }
+        let path = draft.applicationPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if overwrite || path.isEmpty || path == "/Applications/" {
+            draft.applicationPath = application.path
+        }
+        if !application.bundleIdentifier.isEmpty,
+           overwrite || draft.bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.bundleIdentifier = application.bundleIdentifier
+        }
+        fillReceiptIfNeeded()
+    }
+
+    private var currentPackageFilename: String {
+        pendingInstaller?.inspection.originalFilename ?? draft.installer?.originalFilename ?? ""
+    }
+
+    /// Names the app after the application in the package or the Application path, or after the package file
+    /// when there is no application. Only an empty name, or one this sheet filled in earlier, is replaced.
+    private func fillDisplayNameIfAllowed() {
+        let current = draft.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard current.isEmpty || draft.displayName == autoFilledName else { return }
+        let suggestion = DisplayNameSuggestion.suggest(
+            packageApplicationPath: packageApplication?.path,
+            applicationPath: draft.applicationPath,
+            packageFilename: currentPackageFilename
+        )
+        guard !suggestion.isEmpty else { return }
+        draft.displayName = suggestion
+        autoFilledName = suggestion
+    }
+
+    /// With receipt detection selected and no value yet, uses the package's receipt identifier.
+    private func fillReceiptIfNeeded() {
+        guard draft.detection.method == .packageReceipt,
+              draft.detection.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let receipt = packageMetadata?.receiptIdentifier(for: packageApplication) else { return }
+        draft.detection.value = receipt
+    }
+
+    private func packageValuesDiffer(from application: PackageApplication) -> Bool {
+        let path = draft.applicationPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identifier = draft.bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        return path != application.path || (!application.bundleIdentifier.isEmpty && identifier != application.bundleIdentifier)
+    }
+
+    private func readPackageDetails(from url: URL) async {
+        packageMetadata = nil
+        packageApplication = nil
+        packageNote = nil
+        do {
+            let metadata = try await PackageMetadataReader.live().read(at: url)
+            packageMetadata = metadata
+            switch metadata.applications.count {
+            case 0:
+                if let receipt = metadata.receiptIdentifier(for: nil), draft.detection.method == .applicationPath,
+                   draft.applicationPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.applicationPath == "/Applications/" {
+                    draft.detection.method = .packageReceipt
+                    draft.detection.value = receipt
+                    packageNote = "No application bundle was found in this package (for example a fonts or driver package), so detection now uses its installer receipt. The application path can stay empty."
+                } else {
+                    packageNote = "No application bundle was found in this package. Enter the application path and bundle identifier yourself, or use the receipt for detection."
+                }
+            case 1:
+                useApplication(metadata.applications[0], overwrite: false)
+                if metadata.applications[0].bundleIdentifier.isEmpty {
+                    packageNote = "The package does not record this app's bundle identifier and it could not be read from the package's payload. Enter it yourself."
+                }
+            default:
+                packageNote = "This package installs several applications. Choose the one this item represents."
+            }
+            fillReceiptIfNeeded()
+        } catch {
+            let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            packageNote = "\(reason) Enter the application path and bundle identifier yourself."
+        }
+        fillDisplayNameIfAllowed()
     }
 
     private var behaviorSection: some View {
@@ -246,7 +397,7 @@ struct ApplicationEditorSheet: View {
             }
             switch draft.icon.kind {
             case .applicationBundle:
-                Text("swiftDialog shows the icon of the installed app. Before the app arrives it shows a generic icon.")
+                Text("swiftDialog shows the icon of the installed app. Before the app arrives it shows a generic icon. Use Embed App Icons on the Applications page, or a project image, to show it from the start.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             case .projectAsset:
@@ -315,7 +466,14 @@ struct ApplicationEditorSheet: View {
             issues.append("Enter a display name.")
         }
         let path = draft.applicationPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !path.hasPrefix("/") || path == "/" || path == "/Applications/" {
+        let pathIsPlaceholder = path.isEmpty || path == "/Applications/"
+        // Only path and bundle identifier detection use the path. A package that installs no application
+        // (fonts, drivers) can leave it empty and be detected by its receipt.
+        let detectionUsesPath = draft.detection.method == .applicationPath || draft.detection.method == .bundleIdentifier
+        let pathProblem = detectionUsesPath
+            ? (!path.hasPrefix("/") || path == "/" || pathIsPlaceholder)
+            : (!pathIsPlaceholder && (!path.hasPrefix("/") || path == "/"))
+        if pathProblem {
             issues.append("Enter the full application path, for example /Applications/Example.app.")
         }
         switch draft.detection.method {
@@ -353,6 +511,9 @@ struct ApplicationEditorSheet: View {
         var result = draft
         result.displayName = draft.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         result.applicationPath = draft.applicationPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if result.applicationPath == "/Applications/" && result.detection.method != .applicationPath && result.detection.method != .bundleIdentifier {
+            result.applicationPath = ""
+        }
         result.bundleIdentifier = draft.bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         if result.icon.kind == .applicationBundle {
             result.icon.value = ""
@@ -402,6 +563,7 @@ struct ApplicationEditorSheet: View {
                     try InstallerImporter.inspect(at: url)
                 }.value
                 pendingInstaller = PendingInstaller(sourceURL: url, inspection: inspection)
+                await readPackageDetails(from: url)
             } catch {
                 importError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }

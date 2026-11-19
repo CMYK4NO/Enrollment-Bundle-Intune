@@ -26,6 +26,8 @@ State-ownership rules (they keep SwiftUI's "Publishing changes from within view 
 
 **External tools** (Phase 3 and 4). All command execution goes through one `CommandRunning` protocol implemented with `Process`, an explicit `executableURL` and an arguments array. An allowlist restricts executables to `/usr/bin/pkgbuild`, `/usr/bin/productbuild`, `/usr/sbin/pkgutil`, `/usr/sbin/spctl`, `/usr/bin/codesign`, `/usr/bin/security`, the configured swiftDialog binary, and an optional local ShellCheck. Nothing uses `/bin/sh -c`. Tests inject a mock runner.
 
+**Launch sequence.** `App/SplashWindowController.swift` shows `SplashImage` (asset catalogue) at 800×450, centred in the usable area of the main screen (menu bar and Dock excluded). It stays 2.5 seconds, then fades out (no fade with Reduce Motion). `App/MainWindowHold.swift` keeps document windows invisible and inert until the splash is gone; then a new project opens. If the image is missing, no splash is shown and the project opens right away. There is no sign-in at launch: `App/AuthSession.swift` signs in through the browser only when Upload to Intune needs a token, using the tenant and client IDs the administrator entered in Settings (`IntuneConnectionStore` in `Services/Intune/IntuneSupport.swift`, kept in user preferences, never in a project). Closing the last open project starts a new untitled project automatically (`AppDelegate.windowWillClose`); quitting the app does not.
+
 ## 2. Xcode project and file structure
 
 Final layout (phase that adds each part in brackets):
@@ -138,7 +140,7 @@ If swiftDialog is missing or too old, the Preview page explains that only the st
 
 ## 8. Phased implementation plan
 
-**Phase 1 (delivered).** Xcode project; app shell with `DocumentGroup`, sidebar navigation, menu commands and shortcuts; complete Codable data model; package-directory document handling with asset copying and preservation of unmanaged folders; read-only handling of newer schemas; Overview, Branding (placeholders, images, accent color, infobox, support), Applications (catalogue, custom apps, groups with reorder, move, collapse, required groups, display behavior), project Settings; built-in catalogue; static preview with scenarios, simulated statuses, hidden tasks and unlock logic; sample project; unit tests.
+**Phase 1 (delivered).** Xcode project; app shell with `DocumentGroup`, sidebar navigation, menu commands and shortcuts; complete Codable data model; package-directory document handling with asset copying and preservation of unmanaged folders; read-only handling of newer schemas; Overview, Branding (placeholders, images, accent color, infobox, support), Applications (catalogue, custom apps, groups with reorder, move, collapse, required groups, display behavior), app-wide runtime Settings (own window from the app menu: Settings…, ⌘,; Save stores the defaults for new projects and writes them into the frontmost project); built-in catalogue; static preview with scenarios, simulated statuses, hidden tasks and unlock logic; sample project; unit tests.
 
 **Phase 2 (delivered).** Script import (copy, SHA-256, shebang, executable bit, Bash 3.2 construct warnings, risky pattern warnings such as `sudo` and unauthenticated downloads, optional local ShellCheck); Scripts and Execution editors; task planner; dependency graph with cycle, missing, disabled and order checks; validation engine and Validation page; configuration export and import with hashes and path checks; schema migrator with backup and summary.
 
@@ -146,9 +148,9 @@ If swiftDialog is missing or too old, the Preview page explains that only the st
 
 **Phase 4 (delivered, without signing).** Command runner; package builder; signing identity reader; package verification; build reports; build history; internal distribution guide.
 
-### Generated scripts and the Intune scripting standard
+### Generated scripts and the scripting standard
 
-Phase 3 templates follow the Intune endpoint scripting rules where they are stricter than or extend this specification: `#!/bin/bash`, Bash 3.2, explicit `PATH`, root check, `set -u` without `set -e`, `mktemp` with an EXIT trap, `log` and `log_error` behaving as specified, console user detection with `scutil`, `launchctl asuser ... sudo -u` for user context, a final one-line `intune_result` in the form `STATUS: message | key=value`, a `--preview` switch in addition to `--dry-run`, swiftDialog precondition checks against a `dialog_min_version`, and the EDE overlay icon passed with `--overlayicon` (missing file logged, not fatal). Because enrollment logs contain the console user name, log files are created with mode 600 rather than 644. No console user means the dialog is skipped and non-disruptive detection continues.
+Phase 3 templates follow common endpoint scripting rules where they are stricter than or extend this specification: `#!/bin/bash`, Bash 3.2, explicit `PATH`, root check, `set -u` without `set -e`, `mktemp` with an EXIT trap, `log` and `log_error` behaving as specified, console user detection with `scutil`, `launchctl asuser ... sudo -u` for user context, a final one-line `intune_result` in the form `STATUS: message | key=value`, a `--preview` switch in addition to `--dry-run`, swiftDialog precondition checks against a `dialog_min_version`, and the optional overlay icon passed with `--overlayicon` (missing file logged, not fatal). Log files are created with mode 644 so the logged-in user can read them. No console user means the dialog is skipped and non-disruptive detection continues.
 
 ## 9. Technical risks
 

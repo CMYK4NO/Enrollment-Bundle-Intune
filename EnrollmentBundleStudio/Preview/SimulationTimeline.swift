@@ -56,6 +56,7 @@ enum SimulationTimeline {
     /// Applications without a package wait for Intune; everything else actively runs.
     static func isWaitingTask(_ task: PlannedTask, project: EnrollmentProject) -> Bool {
         guard case .application(let id) = task.source, let application = project.application(id: id) else { return false }
+        if TaskPlanner.linkedScript(of: application, in: project) != nil { return false }
         return !(application.installStrategy == .bundledInstaller && application.installer != nil)
     }
 }

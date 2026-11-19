@@ -16,6 +16,12 @@ struct ScriptsView: View {
     @State private var pendingRemoval: ScriptItem?
     @State private var selectedScriptID: UUID?
 
+    /// Display name of the application that runs this script as part of its own task, if any.
+    private func usedByName(of script: ScriptItem) -> String? {
+        guard let owner = TaskPlanner.foldedScripts(in: document.project)[script.taskIdentifier] else { return nil }
+        return document.project.allApplications.first { $0.taskIdentifier == owner }?.displayName
+    }
+
     private var sortedScripts: [ScriptItem] {
         document.project.scripts.sorted { lhs, rhs in
             if lhs.execution.executionOrder != rhs.execution.executionOrder {
@@ -121,7 +127,7 @@ struct ScriptsView: View {
     private var scriptList: some View {
         List(selection: $selectedScriptID) {
             ForEach(sortedScripts) { script in
-                ScriptRow(script: script, data: document.assets[script.relativePath])
+                ScriptRow(script: script, data: document.assets[script.relativePath], usedBy: usedByName(of: script))
                     .tag(script.id)
                     .contextMenu {
                         Button("Edit…") { editContext = TaskEditContext(taskIdentifier: script.taskIdentifier) }
@@ -227,6 +233,7 @@ struct ScriptsView: View {
 private struct ScriptRow: View {
     let script: ScriptItem
     let data: Data?
+    let usedBy: String?
 
     var body: some View {
         let inspection = data.map { ScriptInspectionCache.shared.inspection(for: $0) }
@@ -247,6 +254,11 @@ private struct ScriptRow: View {
             Text(script.relativePath)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
+            if let usedBy {
+                Label("Runs as part of \(usedBy)", systemImage: "app.badge.checkmark")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+            }
             HStack(spacing: 8) {
                 Text(script.execution.isRequired ? "Required" : "Optional")
                 Text(script.execution.context == .user ? "User" : "Root")

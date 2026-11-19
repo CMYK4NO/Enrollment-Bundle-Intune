@@ -48,11 +48,19 @@ struct IntuneUploadRequest: Equatable {
     var bundleVersion: String
     /// Minimum macOS version, for example "26.0".
     var minimumMacOS: String
+    /// Text of the app's pre-install script, or nil for none.
+    var preInstallScript: String? = nil
+
+    var hasPreInstallScript: Bool {
+        !(preInstallScript ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 struct IntuneUploadResult: Equatable {
     let appID: String
     let portalURL: URL
+    /// False when a pre-install script was requested but Intune would not accept it, so the app was created without it.
+    var preInstallScriptAdded = false
 }
 
 /// Uploads an unsigned flat package as an Intune "macOS app (PKG)" (the unmanaged PKG app type, which accepts
@@ -80,7 +88,16 @@ struct IntunePackageUploader {
 
         let client = IntuneGraphClient(transport: transport, token: token)
         progress("Creating the app in Intune…", nil)
-        let app = try await client.request("POST", "/deviceAppManagement/mobileApps", body: Self.appBody(request))
+        var scriptAdded = request.hasPreInstallScript
+        let app: [String: Any]
+        do {
+            app = try await client.request("POST", "/deviceAppManagement/mobileApps", body: Self.appBody(request))
+        } catch IntuneError.http(let status, _) where scriptAdded && status == 400 {
+            // The pre-install script property is part of the beta API; if it is refused, still create the app.
+            scriptAdded = false
+            progress("Intune did not accept the pre-install script; creating the app without it…", nil)
+            app = try await client.request("POST", "/deviceAppManagement/mobileApps", body: Self.appBody(request, includePreInstallScript: false))
+        }
         guard let appID = app["id"] as? String else { throw IntuneError.unexpectedResponse("The new app has no id.") }
 
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("EnrollmentBundleStudio-\(UUID().uuidString).bin")
@@ -88,12 +105,15 @@ struct IntunePackageUploader {
         do {
             try await uploadContent(client: client, appID: appID, request: request, encryptedURL: temporary, progress: progress)
         } catch {
-            // Do not leave an empty app behind. Best effort.
-            _ = try? await client.request("DELETE", "/deviceAppManagement/mobileApps/\(appID)")
+            // Do not leave an empty app behind. Best effort. It runs as its own task so that it also happens after
+            // the administrator cancelled: a request made from the cancelled upload task would be cancelled at once.
+            let cleanup = Task { _ = try? await client.request("DELETE", "/deviceAppManagement/mobileApps/\(appID)") }
+            await cleanup.value
             throw error
         }
         let portal = URL(string: "https://intune.microsoft.com/#view/Microsoft_Intune_Apps/SettingsMenu/~/0/appId/\(appID)")
-        return IntuneUploadResult(appID: appID, portalURL: portal ?? URL(string: "https://intune.microsoft.com")!)
+        return IntuneUploadResult(appID: appID, portalURL: portal ?? URL(string: "https://intune.microsoft.com")!,
+                                  preInstallScriptAdded: scriptAdded)
     }
 
     private func uploadContent(client: IntuneGraphClient, appID: String, request: IntuneUploadRequest,
@@ -204,7 +224,18 @@ struct IntunePackageUploader {
         return object
     }
 
-    static func appBody(_ request: IntuneUploadRequest) -> [String: Any] {
+    static func appBody(_ request: IntuneUploadRequest, includePreInstallScript: Bool = true) -> [String: Any] {
+        var body = baseAppBody(request)
+        if includePreInstallScript, request.hasPreInstallScript, let script = request.preInstallScript {
+            body["preInstallScript"] = [
+                "@odata.type": "#microsoft.graph.macOSAppScript",
+                "scriptContent": Data(script.utf8).base64EncodedString()
+            ]
+        }
+        return body
+    }
+
+    private static func baseAppBody(_ request: IntuneUploadRequest) -> [String: Any] {
         [
             "@odata.type": "#microsoft.graph.macOSPkgApp",
             "displayName": request.displayName,

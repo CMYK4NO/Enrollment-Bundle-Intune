@@ -71,14 +71,26 @@ struct ProjectTransferModifier: ViewModifier {
 
     private func importConfiguration() {
         Task {
-            let urls = await FilePanels.openFiles(title: "Import Configuration", allowedContentTypes: [.enrollmentConfiguration, .json])
+            // Project packages are accepted too. The extension type is added in case the system has not
+            // registered the project type yet, so the panel never greys out a .enrollmentproject.
+            var types: [UTType] = [.enrollmentConfiguration, .json, .enrollmentProject]
+            if let byExtension = UTType(filenameExtension: ProjectLayout.fileExtension), !types.contains(byExtension) {
+                types.append(byExtension)
+            }
+            let urls = await FilePanels.openFiles(title: "Import Configuration", allowedContentTypes: types)
             guard let url = urls.first else { return }
             do {
                 let didAccess = url.startAccessingSecurityScopedResource()
                 defer {
                     if didAccess { url.stopAccessingSecurityScopedResource() }
                 }
-                let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                let values = try url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+                if values.isDirectory == true || url.pathExtension.lowercased() == ProjectLayout.fileExtension {
+                    let package = try EnrollmentProjectDocument(fileWrapper: try FileWrapper(url: url))
+                    pendingImport = PendingImport(fileName: url.lastPathComponent, result: try ConfigurationArchive.importResult(from: package))
+                    return
+                }
+                let size = values.fileSize ?? 0
                 guard size <= ConfigurationArchive.maximumArchiveBytes else {
                     throw ProjectFileError.invalidProjectFile("The configuration file is larger than 64 MB.")
                 }

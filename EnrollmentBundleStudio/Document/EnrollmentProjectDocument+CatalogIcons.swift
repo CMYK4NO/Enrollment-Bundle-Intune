@@ -18,19 +18,24 @@ enum CatalogIconLoader {
 
 extension EnrollmentProjectDocument {
     /// Adds catalogue entries and, for entries that ship an icon, copies that icon into the project's Icons folder
-    /// and points the new application at it. A missing or invalid icon leaves the default application icon.
+    /// and points the new application at it. When none ships, `applicationIconData` (the icon of the app installed
+    /// on this Mac, by application path) is tried. A missing or invalid icon leaves the default application icon.
     /// Returns the number of applications added.
     @discardableResult
     mutating func addCatalogEntries(
         _ entries: [CatalogEntry],
         target: CatalogTarget,
-        iconData: (CatalogEntry) -> Data? = CatalogIconLoader.data(for:)
+        iconData: (CatalogEntry) -> Data? = CatalogIconLoader.data(for:),
+        applicationIconData: (String) -> Data? = { _ in nil }
     ) -> Int {
         let existingIDs = Set(project.allApplications.map { $0.id })
         let added = project.addCatalogEntries(entries, target: target)
         guard added > 0 else { return 0 }
         for item in project.allApplications where !existingIDs.contains(item.id) {
             assignBundledIcon(to: item, iconData: iconData)
+            if let current = project.application(id: item.id), current.icon.kind == .applicationBundle {
+                embedLocalIcon(into: current, iconData: applicationIconData)
+            }
         }
         return added
     }

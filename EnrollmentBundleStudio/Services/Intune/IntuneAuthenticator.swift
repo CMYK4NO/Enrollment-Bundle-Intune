@@ -33,28 +33,31 @@ struct URLSessionTransport: HTTPTransport {
 /// Signs the administrator in with the system's default browser (authorization code flow with PKCE,
 /// loopback redirect). The access token is returned to the caller and kept in memory only; nothing is stored.
 struct IntuneAuthenticator {
-    static let scope = "https://graph.microsoft.com/DeviceManagementApps.ReadWrite.All"
+    /// `offline_access` lets the running app renew the access token without opening the browser again.
+    static let scope = "https://graph.microsoft.com/DeviceManagementApps.ReadWrite.All offline_access"
+
+    /// The tenant and app registration to sign in to. Both are validated GUIDs by the time they get here.
+    let connection: IntuneConnection
+
+    var authority: String { "https://login.microsoftonline.com/\(connection.tenantID)/oauth2/v2.0" }
 
     var transport: HTTPTransport = URLSessionTransport()
     /// Opens a URL in the default browser. Replaced in tests.
     var openURL: (URL) -> Bool = { NSWorkspace.shared.open($0) }
 
-    func signIn(settings: IntuneConnectionSettings) async throws -> String {
-        if let issue = settings.tenantIssue ?? settings.clientIssue { throw IntuneError.invalidSettings(issue) }
-
-        let server = try LoopbackRedirectServer()
+    func signIn() async throws -> IntuneToken {
+        let verifier = PKCE.randomToken()
+        let state = PKCE.randomToken()
+        let server = try LoopbackRedirectServer(expectedState: state)
         defer { server.stop() }
         let port = try await server.start()
         let redirectURI = "http://localhost:\(port)"
-        let verifier = PKCE.randomToken()
-        let state = PKCE.randomToken()
 
-        let authority = "https://login.microsoftonline.com/\(settings.trimmedTenant)/oauth2/v2.0"
         guard var components = URLComponents(string: "\(authority)/authorize") else {
-            throw IntuneError.invalidSettings("The tenant ID is not valid.")
+            throw IntuneError.signInFailed("The sign-in address could not be built.")
         }
         components.queryItems = [
-            URLQueryItem(name: "client_id", value: settings.trimmedClient),
+            URLQueryItem(name: "client_id", value: connection.clientID),
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
             URLQueryItem(name: "response_mode", value: "query"),
@@ -64,7 +67,7 @@ struct IntuneAuthenticator {
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "prompt", value: "select_account")
         ]
-        guard let authorizeURL = components.url else { throw IntuneError.invalidSettings("The sign-in address could not be built.") }
+        guard let authorizeURL = components.url else { throw IntuneError.signInFailed("The sign-in address could not be built.") }
         guard openURL(authorizeURL) else { throw IntuneError.signInFailed("The default browser could not be opened.") }
 
         let response = try await withTaskCancellationHandler {
@@ -78,25 +81,46 @@ struct IntuneAuthenticator {
         guard response.state == state else { throw IntuneError.signInFailed("The sign-in response did not match the request.") }
         guard let code = response.code else { throw IntuneError.signInFailed("No authorization code was returned.") }
 
-        var request = URLRequest(url: URL(string: "\(authority)/token")!)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let form = Self.formEncoded([
-            ("client_id", settings.trimmedClient),
+        return try await requestToken([
+            ("client_id", connection.clientID),
             ("scope", Self.scope),
             ("code", code),
             ("redirect_uri", redirectURI),
             ("grant_type", "authorization_code"),
             ("code_verifier", verifier)
         ])
-        let (data, http) = try await transport.send(request, body: Data(form.utf8))
+    }
+
+    /// Gets a new access token from a refresh token, without opening the browser.
+    func refresh(_ refreshToken: String) async throws -> IntuneToken {
+        try await requestToken([
+            ("client_id", connection.clientID),
+            ("scope", Self.scope),
+            ("refresh_token", refreshToken),
+            ("grant_type", "refresh_token")
+        ])
+    }
+
+    private func requestToken(_ pairs: [(String, String)]) async throws -> IntuneToken {
+        guard let url = URL(string: "\(authority)/token") else {
+            throw IntuneError.signInFailed("The sign-in address could not be built.")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, http) = try await transport.send(request, body: Data(Self.formEncoded(pairs).utf8))
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         guard (200..<300).contains(http.statusCode), let token = object?["access_token"] as? String, !token.isEmpty else {
             let description = (object?["error_description"] as? String) ?? (object?["error"] as? String) ?? "HTTP \(http.statusCode)"
             throw IntuneError.signInFailed(String(description.prefix(300)))
         }
-        return token
+        let lifetime = (object?["expires_in"] as? Double) ?? Double(object?["expires_in"] as? String ?? "") ?? 3600
+        return IntuneToken(
+            accessToken: token,
+            refreshToken: object?["refresh_token"] as? String,
+            expiresAt: Date().addingTimeInterval(lifetime)
+        )
     }
 
     static func formEncoded(_ pairs: [(String, String)]) -> String {

@@ -1,16 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// Signs in to Microsoft Entra in the default browser and uploads the built package to Intune as a
-/// macOS app (PKG). The access token is kept in memory for this upload only.
+/// Uploads the built package to Intune as a macOS app (PKG), using the Microsoft Entra IDs from Settings.
+/// The administrator signs in through the browser on the first upload; the sign-in is renewed or repeated only when it expires.
 struct IntuneUploadSheet: View {
     let packageURL: URL
     let identifier: String
     let version: String
     let minimumMacOS: String
+    /// Text of the pre-install script that is set on the app, or nil for none.
+    let preInstallScript: String?
 
-    @AppStorage("intune.tenantID") private var tenantID = ""
-    @AppStorage("intune.clientID") private var clientID = ""
     @State private var displayName: String
     @State private var publisher: String
     @State private var appDescription: String
@@ -21,11 +21,13 @@ struct IntuneUploadSheet: View {
     private enum Phase: Equatable {
         case idle
         case working(String, Double?)
-        case done(URL)
+        case done(URL, preInstallScriptAdded: Bool)
         case failed(String)
     }
 
-    init(packageURL: URL, identifier: String, version: String, minimumMacOS: String, displayName: String, publisher: String) {
+    init(packageURL: URL, identifier: String, version: String, minimumMacOS: String, displayName: String, publisher: String,
+         preInstallScript: String? = nil) {
+        self.preInstallScript = preInstallScript
         self.packageURL = packageURL
         self.identifier = identifier
         self.version = version
@@ -35,18 +37,16 @@ struct IntuneUploadSheet: View {
         _appDescription = State(initialValue: "Enrollment experience for new Macs. Shows progress while required apps are deployed.")
     }
 
-    private var settings: IntuneConnectionSettings {
-        IntuneConnectionSettings(tenantID: tenantID, clientID: clientID)
-    }
-
     private var isWorking: Bool {
         if case .working = phase { return true }
         return false
     }
 
+    private var isConfigured: Bool { IntuneConnectionStore.shared.load().isComplete }
+
     private var canStart: Bool {
-        settings.isValid && !displayName.trimmingCharacters(in: .whitespaces).isEmpty
-            && !publisher.trimmingCharacters(in: .whitespaces).isEmpty && !isWorking
+        !displayName.trimmingCharacters(in: .whitespaces).isEmpty
+            && !publisher.trimmingCharacters(in: .whitespaces).isEmpty && !isWorking && isConfigured
     }
 
     var body: some View {
@@ -67,30 +67,10 @@ struct IntuneUploadSheet: View {
                     Text("Created as a macOS app (PKG), the app type that accepts unsigned packages. Minimum macOS: \(minimumMacOS). Assign it to your enrollment group in Intune afterwards.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-                Section("Microsoft Entra sign-in") {
-                    TextField("Directory (tenant) ID", text: $tenantID, prompt: Text("contoso.onmicrosoft.com or a GUID"))
-                    if !tenantID.isEmpty, let issue = settings.tenantIssue {
-                        FieldIssueLabel(message: issue, severity: .error)
-                    }
-                    TextField("Application (client) ID", text: $clientID, prompt: Text("00000000-0000-0000-0000-000000000000"))
-                    if !clientID.isEmpty, let issue = settings.clientIssue {
-                        FieldIssueLabel(message: issue, severity: .error)
-                    }
-                    Text("Sign-in opens your default browser. No password or token is stored by this app; the values above are only identifiers and are remembered on this Mac.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    DisclosureGroup("One-time setup in Microsoft Entra") {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("1. Entra admin center > App registrations > New registration (this organization only).")
-                            Text("2. Authentication > Add a platform > Mobile and desktop applications, and add the redirect URI http://localhost. Turn on Allow public client flows.")
-                            Text("3. API permissions > Add > Microsoft Graph > Delegated > DeviceManagementApps.ReadWrite.All, then grant admin consent.")
-                            Text("4. Copy the Directory (tenant) ID and the Application (client) ID from the Overview page into the fields above.")
-                            Text("The person who signs in needs an Intune role that can add apps, such as Application Manager.")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if preInstallScript != nil {
+                        Text("The app is created with a pre-install script (the same file as intune/pre-install.sh in the export). It stops the installation on Macs that already have the onboarding flag.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 Section {
@@ -103,12 +83,18 @@ struct IntuneUploadSheet: View {
         }
         .frame(minWidth: 560, idealWidth: 620, minHeight: 560, idealHeight: 680)
         .interactiveDismissDisabled(isWorking)
+        .onDisappear { task?.cancel() }
     }
 
     @ViewBuilder
     private var statusView: some View {
         switch phase {
         case .idle:
+            if !isConfigured {
+                Label("Enter your Microsoft Entra tenant ID and client ID in Settings (app menu > Settings…, Microsoft Entra tab) before uploading.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
             Text("The package is encrypted and uploaded to your Intune tenant. It includes the enrollment scripts, so upload it only to a tenant you trust.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -121,11 +107,20 @@ struct IntuneUploadSheet: View {
                 }
                 Text(text).font(.callout)
             }
-        case .done(let url):
+        case .done(_, let preInstallScriptAdded):
             VStack(alignment: .leading, spacing: 6) {
                 Label("Uploaded. The app is in Intune and ready to assign.", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Button("Open in Intune") { NSWorkspace.shared.open(url) }
+                if preInstallScript != nil {
+                    if preInstallScriptAdded {
+                        Label("The pre-install script is set on the app.", systemImage: "checkmark.circle")
+                            .font(.callout)
+                    } else {
+                        Label("Intune did not accept the pre-install script, so the app was created without it. In Intune, open the app > Properties > Pre-install script and paste the contents of intune/pre-install.sh from the export.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                    }
+                }
             }
         case .failed(let message):
             Label(message, systemImage: "xmark.octagon.fill")
@@ -146,16 +141,20 @@ struct IntuneUploadSheet: View {
                 }
             }
             .keyboardShortcut(.cancelAction)
-            Button("Sign In and Upload") { start() }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!canStart)
+            if case .done(let portalURL, _) = phase {
+                Button("Open in Intune") { NSWorkspace.shared.open(portalURL) }
+                    .keyboardShortcut(.defaultAction)
+            } else {
+                Button("Upload to Intune") { start() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canStart)
+            }
         }
         .padding(12)
     }
 
     private func start() {
         guard canStart else { return }
-        let connection = settings
         let request = IntuneUploadRequest(
             packageURL: packageURL,
             displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -163,17 +162,22 @@ struct IntuneUploadSheet: View {
             publisher: publisher.trimmingCharacters(in: .whitespacesAndNewlines),
             bundleIdentifier: identifier,
             bundleVersion: version,
-            minimumMacOS: minimumMacOS
+            minimumMacOS: minimumMacOS,
+            preInstallScript: preInstallScript
         )
-        phase = .working("Opening your browser to sign in…", nil)
+        phase = .working("Starting the upload…", nil)
         task = Task {
             do {
-                let token = try await IntuneAuthenticator().signIn(settings: connection)
-                await MainActor.run { phase = .working("Signed in. Starting the upload…", nil) }
-                let result = try await IntunePackageUploader().upload(request: request, token: token) { text, fraction in
-                    Task { @MainActor in phase = .working(text, fraction) }
+                let token = try await AuthSession.shared.validToken {
+                    phase = .working("Sign in with Microsoft in your browser…", nil)
                 }
-                await MainActor.run { phase = .done(result.portalURL) }
+                let result = try await IntunePackageUploader().upload(request: request, token: token) { text, fraction in
+                    // Progress arrives asynchronously; never let a late update replace the finished, failed or cancelled state.
+                    Task { @MainActor in
+                        if case .working = phase { phase = .working(text, fraction) }
+                    }
+                }
+                await MainActor.run { phase = .done(result.portalURL, preInstallScriptAdded: result.preInstallScriptAdded) }
             } catch is CancellationError {
                 await MainActor.run { phase = .idle }
             } catch {

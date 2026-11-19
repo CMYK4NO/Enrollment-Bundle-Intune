@@ -16,10 +16,11 @@ final class OnboardingGuardTests: XCTestCase {
         XCTAssertEqual(settings.enrollmentWindowHours, 20)
     }
 
-    func testNoIntunePreinstallScriptIsGenerated() throws {
+    func testIntunePreinstallScriptIsOutsideThePackagePayload() throws {
         let framework = try FrameworkGenerator.generate(project: project(), assets: [:], installerSources: [:])
-        XCTAssertNil(framework.file(at: "intune/pre-install-script.sh"))
-        XCTAssertFalse(framework.allPaths.contains { $0.hasPrefix("intune/") })
+        XCTAssertNotNil(framework.file(at: "intune/pre-install.sh"))
+        XCTAssertEqual(framework.allPaths.filter { $0.hasPrefix("intune/") }, ["intune/pre-install.sh"])
+        XCTAssertFalse(framework.allPaths.contains { $0.hasPrefix("framework/") && $0.contains("pre-install") })
     }
 
     func testGuardOffLeavesFlagEmpty() throws {
@@ -99,6 +100,5 @@ final class OnboardingGuardTests: XCTestCase {
         let report = try String(contentsOf: result.reportURL, encoding: .utf8)
         XCTAssertTrue(report.contains("Onboarding flag"))
         XCTAssertTrue(report.contains("20 hours"))
-        XCTAssertFalse(report.contains("pre-install"))
     }
 }

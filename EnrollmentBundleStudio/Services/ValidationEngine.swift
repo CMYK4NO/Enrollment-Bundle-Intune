@@ -37,6 +37,7 @@ enum ValidationEngine {
         checkApplications(project, assets: assets, environment: environment, installerPaths: installerPaths, add: add)
         checkScripts(project, assets: assets, environment: environment, add: add)
         checkSystemTasks(project, add: add)
+        checkDock(project, add: add)
         checkDependencies(analysis, name: name, add: add)
         checkUnlock(project, plan: plan, analysis: analysis, assets: assets, installerPaths: installerPaths, name: name, add: add)
         checkEnvironment(project, assets: assets, environment: environment, add: add)
@@ -45,6 +46,45 @@ enum ValidationEngine {
     }
 
     typealias Add = (ValidationSeverity, ValidationArea, String, String, String) -> Void
+
+    // MARK: Dock
+
+    private static func checkDock(_ project: EnrollmentProject, add: Add) {
+        guard let dock = project.dock, dock.isEnabled else { return }
+        var seen = Set<String>()
+        for item in dock.items {
+            var label = item.label
+            var path = item.path
+            if let identifier = item.applicationTaskIdentifier {
+                guard let application = project.allApplications.first(where: { $0.taskIdentifier == identifier }) else {
+                    add(.warning, .dock, "Dock: \(label.isEmpty ? identifier : label)",
+                        "This app is no longer in the project, so it is left out of the Dock.",
+                        "Remove it from the Dock page, or add the application back on the Applications page.")
+                    continue
+                }
+                label = application.displayName
+                path = application.applicationPath
+            }
+            let component = "Dock: \(label.isEmpty ? path : label)"
+            let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !DockConfiguration.isValidApplicationPath(trimmed) {
+                add(.error, .dock, component, "The path \"\(trimmed)\" is not the full path of an application.",
+                    "Use a path such as /Applications/Example.app on the Dock page, or fix the application path on the Applications page.")
+            } else if !seen.insert(trimmed).inserted {
+                add(.warning, .dock, component, "This application is listed more than once; only the first entry is used.",
+                    "Remove the duplicate on the Dock page.")
+            }
+        }
+        if dock.resolvedItems(in: project).isEmpty {
+            add(.warning, .dock, "Dock", "No valid apps are listed, so the Dock will not be changed.",
+                "Add apps on the Dock page, or turn off Dock customization.")
+        }
+        if !DockConfiguration.tileSizeRange.contains(dock.tileSize) {
+            add(.warning, .dock, "Dock icon size",
+                "The icon size \(dock.tileSize) is outside \(DockConfiguration.tileSizeRange.lowerBound) to \(DockConfiguration.tileSizeRange.upperBound) and will be adjusted.",
+                "Choose a size on the Dock page.")
+        }
+    }
 
     // MARK: Project settings
 
@@ -87,10 +127,16 @@ enum ValidationEngine {
         if !ProjectSettings.enrollmentDurationRange.contains(settings.maximumEnrollmentDurationSeconds) {
             add(.error, .project, "Maximum enrollment duration", "The maximum enrollment duration is outside 10 minutes to 12 hours.", "Adjust it in Settings.")
         }
-        for (component, path) in [("Install location", settings.installLocation), ("State directory", settings.stateDirectory), ("swiftDialog path", settings.swiftDialogPath)] {
-            if let issue = FieldValidator.absolutePathIssue(path) {
-                add(.error, .project, component, issue, "Enter an absolute device path in Settings.")
+        for (component, path) in [("Install location", settings.installLocation), ("State directory", settings.stateDirectory)] {
+            if let issue = FieldValidator.deviceDirectoryIssue(path) {
+                add(.error, .project, component, issue, "Enter a dedicated absolute device folder in Settings.")
             }
+        }
+        if let issue = FieldValidator.detectionDirectoryIssue(settings.detectionAppDirectory ?? "") {
+            add(.error, .project, "Detection app folder", issue, "Enter an absolute device folder in Settings, or leave it empty to use the install location.")
+        }
+        if let issue = FieldValidator.absolutePathIssue(settings.swiftDialogPath) {
+            add(.error, .project, "swiftDialog path", issue, "Enter an absolute device path in Settings.")
         }
         if !FieldValidator.isValidVersion(settings.swiftDialogMinimumVersion) {
             add(.error, .project, "swiftDialog minimum version", "\"\(settings.swiftDialogMinimumVersion)\" is not a valid version.", "Use a version such as 2.5.0.")
@@ -135,10 +181,14 @@ enum ValidationEngine {
         if !branding.accentColor.isValid {
             add(.error, .branding, "Accent color", "\"\(branding.accentColor.hex)\" is not a valid color.", "Choose a color in Branding.")
         }
-        for (component, path) in [("Company logo", branding.logoPath), ("Banner", branding.bannerPath), ("Overlay icon", branding.overlayIconPath)] {
+        for (component, path) in [("Company logo", branding.logoPath), ("Banner", branding.bannerPath), ("Overlay icon", branding.overlayIconPath), ("Desktop wallpaper", branding.wallpaperPath)] {
             guard let path else { continue }
             if assets[path] == nil {
                 add(.error, .branding, component, "The image file \(path) is missing from the project.", "Choose the image again in Branding.")
+            } else if let data = assets[path], component == "Desktop wallpaper" {
+                if (try? AssetImporter.validateWallpaper(data)) == nil {
+                    add(.error, .branding, component, "\(path) is not a valid PNG or JPEG image within 50 MB.", "Choose a different wallpaper in Branding.")
+                }
             } else if let data = assets[path], (try? AssetImporter.validateImage(data)) == nil {
                 add(.error, .branding, component, "\(path) is not a valid PNG, JPEG or ICNS image.", "Choose a different image in Branding.")
             }
@@ -179,7 +229,12 @@ enum ValidationEngine {
                 if application.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     add(.error, .applications, component, "The application has no display name.", "Edit the application in Applications.")
                 }
-                if !application.applicationPath.hasPrefix("/") {
+                // Only path and bundle identifier detection use the path, so a package that installs no application
+                // (fonts, drivers) can leave it empty and be detected by its receipt instead.
+                let usesPath = application.detection.method == .applicationPath || application.detection.method == .bundleIdentifier
+                if application.applicationPath.isEmpty && !usesPath {
+                    // Nothing to check.
+                } else if !application.applicationPath.hasPrefix("/") {
                     add(.error, .applications, component, "The application path is not absolute.", "Enter a full path such as /Applications/Example.app.")
                 } else if !environment.fileExists(application.applicationPath) {
                     add(.warning, .applications, component, "\(application.applicationPath) does not exist on this Mac.",
@@ -257,9 +312,14 @@ enum ValidationEngine {
     // MARK: Scripts
 
     private static func checkScripts(_ project: EnrollmentProject, assets: [String: Data], environment: ValidationEnvironment, add: Add) {
+        let folded = TaskPlanner.foldedScripts(in: project)
         let maximum = project.settings.maximumEnrollmentDurationSeconds
         for script in project.scripts {
             let component = "Script \(script.displayName)"
+            if let owner = folded[script.taskIdentifier] {
+                add(.information, .scripts, component, "Runs as part of the application \(owner); its own order, required state, visibility and timeout are not used.",
+                    "Edit those settings on the application in Applications.")
+            }
             guard !script.relativePath.isEmpty, let data = assets[script.relativePath] else {
                 add(.error, .scripts, component, "The script file \(script.relativePath.isEmpty ? "(none)" : script.relativePath) is missing from the project.",
                     "Replace the file or remove the script in Scripts.")

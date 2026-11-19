@@ -20,6 +20,21 @@ final class ValidationEngineTests: XCTestCase {
         report.issues.filter { $0.severity == severity }.map { "\($0.component): \($0.message)" }
     }
 
+    func testReceiptDetectedAppNeedsNoApplicationPath() {
+        var project = validProject()
+        var item = ApplicationItem.makeCustom(strategy: .waitForIntune, timeoutSeconds: 900)
+        item.taskIdentifier = "app.dt-fonts"
+        item.displayName = "DT Fonts"
+        item.applicationPath = ""
+        item.detection = TaskCheck(method: .packageReceipt, value: "dtfonts")
+        project.applicationGroups[0].applications.append(item)
+        let report = validate(project)
+        XCTAssertFalse(messages(report, .error).contains { $0.contains("DT Fonts") }, "\(messages(report, .error))")
+        item.detection = TaskCheck(method: .applicationPath, value: "")
+        project.applicationGroups[0].applications[project.applicationGroups[0].applications.count - 1] = item
+        XCTAssertTrue(messages(validate(project), .error).contains { $0.contains("DT Fonts") }, "Path detection still needs an absolute path")
+    }
+
     func testValidProjectHasNoErrors() {
         let report = validate(validProject())
         XCTAssertEqual(report.errorCount, 0, "\(messages(report, .error))")

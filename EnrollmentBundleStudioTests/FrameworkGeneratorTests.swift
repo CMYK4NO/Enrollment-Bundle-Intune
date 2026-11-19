@@ -37,7 +37,8 @@ final class FrameworkGeneratorTests: XCTestCase {
             "framework/lib/common.sh", "framework/lib/task-runner.sh", "framework/lib/dialog.sh",
             "framework/icons/branding-CompanyLogo.png", "framework/scripts/CheckExample.sh",
             "framework/installers/Example-Tool.pkg", "launchd/com.contoso.enrollment.plist",
-            "package-scripts/preinstall", "package-scripts/postinstall", "README.txt"
+            "package-scripts/preinstall", "package-scripts/postinstall", "intune/pre-install.sh", "README.txt",
+            "detection/Contoso-Partners-it-s-Bundle.app/Contents/Info.plist", "detection/Contoso-Partners-it-s-Bundle.app/Contents/MacOS/marker"
         ] {
             XCTAssertTrue(paths.contains(expected), "Missing \(expected)")
         }
@@ -48,7 +49,8 @@ final class FrameworkGeneratorTests: XCTestCase {
         let (_, framework) = try generate()
         let executables = Set(framework.files.filter { $0.isExecutable }.map { $0.path })
         XCTAssertEqual(executables, ["framework/enrollment.sh", "framework/uninstall.sh", "framework/scripts/CheckExample.sh",
-                                     "package-scripts/preinstall", "package-scripts/postinstall"])
+                                     "package-scripts/preinstall", "package-scripts/postinstall", "intune/pre-install.sh",
+                                     "detection/Contoso-Partners-it-s-Bundle.app/Contents/MacOS/marker"])
     }
 
     func testTaskFilesAreDataOnlyAndOrdered() throws {
@@ -83,7 +85,7 @@ final class FrameworkGeneratorTests: XCTestCase {
         XCTAssertEqual(portal["TASK_REQUIRED"], "1")
         XCTAssertEqual(portal["TASK_APP_PATH"], "/Applications/Company Portal.app")
         XCTAssertEqual(portal["TASK_DETECTION"], "bundleIdentifier")
-        XCTAssertEqual(portal["TASK_LIST_INDEX"], "0")
+        XCTAssertEqual(portal["TASK_LIST_INDEX"], "0", "An imported script is hidden by default, so the first application takes row 0")
 
         let tool = try task(framework, "app.example-tool")
         XCTAssertEqual(tool["TASK_TYPE"], "packageInstallation")
@@ -94,6 +96,8 @@ final class FrameworkGeneratorTests: XCTestCase {
         XCTAssertEqual(script["TASK_TYPE"], "shellScript")
         XCTAssertEqual(script["TASK_SCRIPT"], "scripts/CheckExample.sh")
         XCTAssertEqual(script["TASK_SUCCESS_CODES"], "0")
+        XCTAssertEqual(script["TASK_VISIBLE"], "0", "An imported script stays out of the enrollment list unless the administrator shows it")
+        XCTAssertEqual(script["TASK_LIST_INDEX"], "-1")
 
         let wait = try task(framework, "system.wait-condition")
         XCTAssertEqual(wait["TASK_TYPE"], "waitCondition")
@@ -147,7 +151,8 @@ final class FrameworkGeneratorTests: XCTestCase {
         let list = try XCTUnwrap(json["listitem"] as? [[String: Any]])
         let state = PreviewBuilder.makeState(project: document.project, scenario: .initial, overrides: [:])
         XCTAssertEqual(list.count, state.displayItems.count)
-        XCTAssertEqual(list.first?["icon"] as? String, "/Applications/Company Portal.app")
+        XCTAssertFalse(list.contains { $0["icon"] as? String == "SF=terminal" }, "The imported script is hidden by default")
+        XCTAssertTrue(list.contains { $0["icon"] as? String == "/Applications/Company Portal.app" })
         XCTAssertEqual(json["progress"] as? String, String(framework.taskCount))
     }
 
@@ -191,6 +196,14 @@ final class FrameworkGeneratorTests: XCTestCase {
         }
     }
 
+    func testInvalidBundleIdentifierIsRefusedBeforeItBecomesAFileName() throws {
+        var (document, _) = try generate()
+        document.project.settings.bundleIdentifier = "../../evil"
+        XCTAssertThrowsError(try FrameworkGenerator.generate(project: document.project, assets: document.assets, installerSources: document.installerSources)) { error in
+            XCTAssertEqual(error as? FrameworkGeneratorError, .invalidBundleIdentifier("../../evil"))
+        }
+    }
+
     func testMissingFilesAreReported() throws {
         var (document, _) = try generate()
         document.project.branding.logoPath = "Branding/Missing.png"
@@ -217,6 +230,21 @@ final class FrameworkGeneratorTests: XCTestCase {
         XCTAssertEqual(FrameworkGenerator.iconRelativePath(for: "Branding/Banner.png"), "icons/branding-Banner.png")
         XCTAssertEqual(FrameworkGenerator.iconRelativePath(for: "Icons/Edge.png"), "icons/Edge.png")
         XCTAssertEqual(FrameworkGenerator.trimmedDirectory("/Library/X//"), "/Library/X")
+    }
+
+    func testIntunePreInstallScriptChecksTheOnboardingFlag() throws {
+        let (document, framework) = try generate()
+        let script = try XCTUnwrap(framework.text(at: "intune/pre-install.sh"))
+        XCTAssertTrue(script.hasPrefix("#!/bin/bash\n"))
+        XCTAssertFalse(script.contains("__ONBOARDING_FLAG__"), "The placeholder is replaced")
+        let flag = document.project.settings.onboardingFlagPath
+        XCTAssertTrue(script.contains("onboarding_flag='\(flag)'"))
+        XCTAssertTrue(script.contains("appname=\"onBoarding\""))
+        XCTAssertTrue(script.contains("logandmetadir=\"/Library/Logs/Microsoft/IntuneScripts/$appname\""))
+        XCTAssertTrue(script.contains("exit 1"), "An onboarded Mac does not install the package")
+        XCTAssertFalse(script.contains("&>>"))
+        XCTAssertFalse(framework.files.contains { $0.path.hasPrefix("framework/") && $0.path.contains("pre-install") },
+                       "It is not part of the package payload")
     }
 }
 

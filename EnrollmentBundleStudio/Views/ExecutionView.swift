@@ -29,7 +29,8 @@ struct ExecutionView: View {
         let analysis = DependencyGraph.analyze(plan)
         let rows = makeRows(plan: plan, analysis: analysis)
         VStack(spacing: 0) {
-            actionBar
+            actionBar(moveUp: canMove(.up, plan: plan, analysis: analysis),
+                      moveDown: canMove(.down, plan: plan, analysis: analysis))
             if analysis.hasCriticalIssues {
                 NoticeBanner(
                     symbolName: "xmark.octagon.fill",
@@ -90,6 +91,13 @@ struct ExecutionView: View {
             .contextMenu(forSelectionType: String.self) { ids in
                 if let id = ids.first {
                     Button("Edit…") { editContext = TaskEditContext(taskIdentifier: id) }
+                    if ids.count == 1 {
+                        Divider()
+                        Button("Move Up") { move(id, .up) }
+                            .disabled(!canMove(.up, id: id, plan: plan, analysis: analysis))
+                        Button("Move Down") { move(id, .down) }
+                            .disabled(!canMove(.down, id: id, plan: plan, analysis: analysis))
+                    }
                     if let task = document.project.systemTasks.first(where: { $0.taskIdentifier == id }) {
                         Divider()
                         Button("Remove System Task…", role: .destructive) { pendingRemoval = task }
@@ -101,7 +109,7 @@ struct ExecutionView: View {
                 }
             }
             Divider()
-            Text("Steps follow dependencies first, then execution order. Tasks in a batch (same parallel group, no dependency between them) may run at the same time. Final validation always waits for every required task. Double-click a row to edit it.")
+            Text("Steps follow dependencies first, then execution order. Tasks in a batch (same parallel group, no dependency between them) may run at the same time. Final validation always waits for every required task. Double-click a row to edit it. Select a row and use Move Up or Move Down to change its place: the execution orders are renumbered to match, and a task moves together with the tasks it depends on (or that depend on it).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(10)
@@ -128,7 +136,7 @@ struct ExecutionView: View {
         }
     }
 
-    private var actionBar: some View {
+    private func actionBar(moveUp: Bool, moveDown: Bool) -> some View {
         HStack(spacing: 10) {
             Menu {
                 Button("Intune Synchronization") { addSystemTask(.intuneSync) }
@@ -149,6 +157,22 @@ struct ExecutionView: View {
                 Label("Edit…", systemImage: "pencil")
             }
             .disabled(selection.count != 1)
+            Button {
+                if let id = selectedID { move(id, .up) }
+            } label: {
+                Label("Move Up", systemImage: "arrow.up")
+            }
+            .disabled(!moveUp)
+            .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+            .help("Run the selected task earlier, together with the tasks it depends on")
+            Button {
+                if let id = selectedID { move(id, .down) }
+            } label: {
+                Label("Move Down", systemImage: "arrow.down")
+            }
+            .disabled(!moveDown)
+            .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+            .help("Run the selected task later, together with the tasks that depend on it")
             Spacer()
             Text("Applications are added in Applications and scripts in Scripts.")
                 .font(.caption)
@@ -158,6 +182,25 @@ struct ExecutionView: View {
     }
 
     // MARK: Helpers
+
+    private var selectedID: String? {
+        selection.count == 1 ? selection.first : nil
+    }
+
+    private func canMove(_ direction: TaskMoveDirection, plan: [PlannedTask], analysis: DependencyAnalysis) -> Bool {
+        guard let id = selectedID else { return false }
+        return canMove(direction, id: id, plan: plan, analysis: analysis)
+    }
+
+    private func canMove(_ direction: TaskMoveDirection, id: String, plan: [PlannedTask], analysis: DependencyAnalysis) -> Bool {
+        !document.isReadOnly
+            && TaskReordering.moved(in: plan, analysis: analysis, identifier: id, direction: direction) != nil
+    }
+
+    private func move(_ id: String, _ direction: TaskMoveDirection) {
+        guard !document.isReadOnly else { return }
+        document.project.moveTask(id, direction)
+    }
 
     private func addSystemTask(_ type: TaskType) {
         let id = document.project.addSystemTask(type: type)

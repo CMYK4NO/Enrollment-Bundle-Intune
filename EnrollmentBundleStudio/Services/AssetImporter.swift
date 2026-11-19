@@ -21,6 +21,7 @@ enum BrandingImageRole: String, CaseIterable, Identifiable {
     case logo
     case banner
     case overlay
+    case wallpaper
 
     var id: String { rawValue }
 
@@ -29,6 +30,7 @@ enum BrandingImageRole: String, CaseIterable, Identifiable {
         case .logo: return "CompanyLogo"
         case .banner: return "Banner"
         case .overlay: return "OverlayIcon"
+        case .wallpaper: return "Wallpaper"
         }
     }
 
@@ -37,6 +39,7 @@ enum BrandingImageRole: String, CaseIterable, Identifiable {
         case .logo: return "Company logo"
         case .banner: return "Banner"
         case .overlay: return "Overlay icon"
+        case .wallpaper: return "Desktop wallpaper"
         }
     }
 }
@@ -47,6 +50,7 @@ enum AssetImportError: LocalizedError, Equatable {
     case tooLarge(Int)
     case unsupportedFormat
     case undecodableImage
+    case unsupportedWallpaperFormat
 
     var errorDescription: String? {
         switch self {
@@ -61,6 +65,8 @@ enum AssetImportError: LocalizedError, Equatable {
             return "Only PNG, JPEG and ICNS images are supported."
         case .undecodableImage:
             return "The file looks like an image but could not be decoded."
+        case .unsupportedWallpaperFormat:
+            return "A wallpaper must be a PNG or JPEG image."
         }
     }
 }
@@ -69,6 +75,9 @@ enum AssetImportError: LocalizedError, Equatable {
 /// The original file is never referenced after import, so moving it later does not break the project.
 enum AssetImporter {
     static let maximumImageBytes = 10 * 1024 * 1024
+    /// Wallpapers are large photographs, so they get a higher limit than logos and icons.
+    static let maximumWallpaperBytes = 50 * 1024 * 1024
+    static let allowedWallpaperTypes: [UTType] = [.png, .jpeg]
     static let allowedImageTypes: [UTType] = [.png, .jpeg, .icns]
 
     /// Reads a user-selected file after checking that it is a regular file within the size limit.
@@ -118,6 +127,13 @@ enum AssetImporter {
               CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else {
             throw AssetImportError.undecodableImage
         }
+        return format
+    }
+
+    /// Validates a wallpaper: a decodable PNG or JPEG within the wallpaper size limit.
+    static func validateWallpaper(_ data: Data) throws -> ImageFormat {
+        let format = try validateImage(data, maximumBytes: maximumWallpaperBytes)
+        guard format == .png || format == .jpeg else { throw AssetImportError.unsupportedWallpaperFormat }
         return format
     }
 

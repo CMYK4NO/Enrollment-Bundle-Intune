@@ -3,9 +3,10 @@ import SwiftUI
 enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     case overview
     case branding
-    case applications
     case scripts
+    case applications
     case execution
+    case dock
     case preview
     case validation
     case packageBuilder
@@ -21,6 +22,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .applications: return "Applications"
         case .scripts: return "Scripts"
         case .execution: return "Execution"
+        case .dock: return "Dock"
         case .preview: return "Preview"
         case .validation: return "Validation"
         case .packageBuilder: return "Package Builder"
@@ -36,6 +38,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .applications: return "app.badge"
         case .scripts: return "terminal"
         case .execution: return "arrow.triangle.branch"
+        case .dock: return "dock.rectangle"
         case .preview: return "eye"
         case .validation: return "checkmark.shield"
         case .packageBuilder: return "shippingbox"
@@ -47,7 +50,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     /// Implementation phase that delivers the section's editor.
     var availablePhase: Int {
         switch self {
-        case .overview, .branding, .applications, .preview, .settings: return 1
+        case .overview, .branding, .applications, .dock, .preview, .settings: return 1
         case .scripts, .execution, .validation: return 2
         case .packageBuilder: return 3
         case .buildHistory: return 4
@@ -68,7 +71,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
             return "Build unsigned or signed installer packages with Apple's pkgbuild and productbuild, then verify them."
         case .buildHistory:
             return "Browse previous builds and their reports, including package hashes and signature status."
-        case .overview, .branding, .applications, .preview, .settings:
+        case .overview, .branding, .applications, .dock, .preview, .settings:
             return ""
         }
     }

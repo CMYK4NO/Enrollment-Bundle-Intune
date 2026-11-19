@@ -25,12 +25,84 @@ final class IntuneUploadTests: XCTestCase {
         XCTAssertNil(RedirectParser.parse(requestHead: ""))
     }
 
-    func testConnectionSettingsValidation() {
-        XCTAssertTrue(IntuneConnectionSettings(tenantID: "contoso.onmicrosoft.com", clientID: UUID().uuidString).isValid)
-        XCTAssertTrue(IntuneConnectionSettings(tenantID: UUID().uuidString, clientID: UUID().uuidString).isValid)
-        XCTAssertNotNil(IntuneConnectionSettings(tenantID: "", clientID: UUID().uuidString).tenantIssue)
-        XCTAssertNotNil(IntuneConnectionSettings(tenantID: "bad tenant/..", clientID: UUID().uuidString).tenantIssue)
-        XCTAssertNotNil(IntuneConnectionSettings(tenantID: "contoso.com", clientID: "not-a-guid").clientIssue)
+    // MARK: Entra connection (entered in Settings, nothing built in)
+
+    private let sampleTenant = "11111111-2222-3333-4444-555555555555"
+    private let sampleClient = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+
+    private func isolatedPreferences() throws -> (UserDefaults, String) {
+        let name = "IntuneConnectionTests-\(UUID().uuidString)"
+        return (try XCTUnwrap(UserDefaults(suiteName: name)), name)
+    }
+
+    func testNothingIsBuiltIn() {
+        let empty = IntuneConnection()
+        XCTAssertTrue(empty.isEmpty)
+        XCTAssertFalse(empty.isComplete)
+        XCTAssertTrue(empty.isSavable)
+    }
+
+    func testConnectionNeedsBothIDsToBeGUIDs() {
+        XCTAssertTrue(IntuneConnection(tenantID: sampleTenant, clientID: sampleClient).isComplete)
+        XCTAssertTrue(IntuneConnection(tenantID: "  \(sampleTenant)\n", clientID: sampleClient).isComplete)
+        XCTAssertFalse(IntuneConnection(tenantID: sampleTenant, clientID: "").isComplete)
+        XCTAssertFalse(IntuneConnection(tenantID: sampleTenant, clientID: "").isSavable)
+        XCTAssertFalse(IntuneConnection(tenantID: "contoso.onmicrosoft.com", clientID: sampleClient).isComplete)
+        XCTAssertNil(IntuneConnection.idIssue(sampleTenant))
+        XCTAssertEqual(IntuneConnection.idIssue("  "), "Required.")
+        XCTAssertNotNil(IntuneConnection.idIssue("not-a-guid"))
+    }
+
+    func testNormalizingTrimsAndLowercases() {
+        let normalized = IntuneConnection(tenantID: " \(sampleTenant) ", clientID: sampleClient).normalized
+        XCTAssertEqual(normalized.tenantID, sampleTenant)
+        XCTAssertEqual(normalized.clientID, sampleClient.lowercased())
+    }
+
+    func testStoreRoundTripsAndClears() throws {
+        let (preferences, name) = try isolatedPreferences()
+        defer { preferences.removePersistentDomain(forName: name) }
+        let store = IntuneConnectionStore(preferences: preferences)
+        XCTAssertTrue(store.load().isEmpty)
+
+        try store.save(IntuneConnection(tenantID: sampleTenant, clientID: sampleClient))
+        XCTAssertEqual(store.load(), IntuneConnection(tenantID: sampleTenant, clientID: sampleClient.lowercased()))
+
+        try store.save(IntuneConnection())
+        XCTAssertTrue(store.load().isEmpty)
+    }
+
+    func testStoreRefusesAHalfFilledConnectionAndKeepsWhatWasSaved() throws {
+        let (preferences, name) = try isolatedPreferences()
+        defer { preferences.removePersistentDomain(forName: name) }
+        let store = IntuneConnectionStore(preferences: preferences)
+        try store.save(IntuneConnection(tenantID: sampleTenant, clientID: sampleClient))
+        XCTAssertThrowsError(try store.save(IntuneConnection(tenantID: sampleTenant, clientID: "")))
+        XCTAssertTrue(store.load().isComplete)
+    }
+
+    func testStoreIgnoresInvalidStoredData() throws {
+        let (preferences, name) = try isolatedPreferences()
+        defer { preferences.removePersistentDomain(forName: name) }
+        preferences.set(Data("{\"tenantID\":\"x\",\"clientID\":\"y\"}".utf8), forKey: IntuneConnectionStore.storageKey)
+        XCTAssertTrue(IntuneConnectionStore(preferences: preferences).load().isEmpty)
+    }
+
+    func testAuthorityUsesTheConfiguredTenant() {
+        let authenticator = IntuneAuthenticator(connection: IntuneConnection(tenantID: sampleTenant, clientID: sampleClient))
+        XCTAssertEqual(authenticator.authority, "https://login.microsoftonline.com/\(sampleTenant)/oauth2/v2.0")
+    }
+
+    func testTokenIsValidUntilTwoMinutesBeforeItExpires() {
+        let now = Date()
+        XCTAssertTrue(IntuneToken(accessToken: "a", refreshToken: nil, expiresAt: now.addingTimeInterval(600)).isValid(at: now))
+        XCTAssertFalse(IntuneToken(accessToken: "a", refreshToken: nil, expiresAt: now.addingTimeInterval(60)).isValid(at: now))
+        XCTAssertFalse(IntuneToken(accessToken: "a", refreshToken: nil, expiresAt: now.addingTimeInterval(-5)).isValid(at: now))
+    }
+
+    func testSignInRequestsRenewableAccess() {
+        XCTAssertTrue(IntuneAuthenticator.scope.contains("DeviceManagementApps.ReadWrite.All"))
+        XCTAssertTrue(IntuneAuthenticator.scope.contains("offline_access"))
     }
 
     func testFormEncodingEscapesReservedCharacters() {
@@ -127,6 +199,7 @@ final class IntuneUploadTests: XCTestCase {
 private final class ScriptedTransport: HTTPTransport, @unchecked Sendable {
     var requests: [(method: String, url: String)] = []
     var bodies: [Data?] = []
+    var rejectPreInstallScript = false
     var fileStates = ["azureStorageUriRequestPending", "azureStorageUriRequestSuccess", "commitFilePending", "commitFileSuccess"]
 
     func send(_ request: URLRequest, body: Data?) async throws -> (Data, HTTPURLResponse) {
@@ -138,7 +211,12 @@ private final class ScriptedTransport: HTTPTransport, @unchecked Sendable {
         }
         if url.hasPrefix("https://storage.example/") { return reply(201, "") }
         let method = request.httpMethod ?? "GET"
-        if method == "POST", url.hasSuffix("/mobileApps") { return reply(201, #"{"id":"app-1"}"#) }
+        if method == "POST", url.hasSuffix("/mobileApps") {
+            if rejectPreInstallScript, let body, String(decoding: body, as: UTF8.self).contains("preInstallScript") {
+                return reply(400, #"{"error":{"message":"Unknown property preInstallScript"}}"#)
+            }
+            return reply(201, #"{"id":"app-1"}"#)
+        }
         if method == "POST", url.hasSuffix("/contentVersions") { return reply(201, #"{"id":"1"}"#) }
         if method == "POST", url.hasSuffix("/files") { return reply(201, #"{"id":"file-1"}"#) }
         if method == "POST", url.hasSuffix("/commit") { return reply(200, "") }
@@ -212,3 +290,73 @@ final class IntuneUploadFlowTests: XCTestCase {
         }
     }
 }
+
+final class IntunePreInstallScriptTests: XCTestCase {
+    private func request(script: String?, package: URL = URL(fileURLWithPath: "/tmp/Enrollment-1.0.0.pkg")) -> IntuneUploadRequest {
+        IntuneUploadRequest(packageURL: package, displayName: "Enrollment", description: "d", publisher: "Contoso",
+                            bundleIdentifier: "com.contoso.enrollment.bundle", bundleVersion: "1.0.0", minimumMacOS: "26.0",
+                            preInstallScript: script)
+    }
+
+    func testAppBodyCarriesTheScriptAsBase64() throws {
+        let script = "#!/bin/bash\nexit 0\n"
+        let body = IntunePackageUploader.appBody(request(script: script))
+        let object = try XCTUnwrap(body["preInstallScript"] as? [String: Any])
+        XCTAssertEqual(object["@odata.type"] as? String, "#microsoft.graph.macOSAppScript")
+        let encoded = try XCTUnwrap(object["scriptContent"] as? String)
+        XCTAssertEqual(String(decoding: try XCTUnwrap(Data(base64Encoded: encoded)), as: UTF8.self), script)
+        XCTAssertNoThrow(try JSONSerialization.data(withJSONObject: body))
+    }
+
+    func testAppBodyHasNoScriptWhenNoneIsGivenOrItIsLeftOut() {
+        XCTAssertNil(IntunePackageUploader.appBody(request(script: nil))["preInstallScript"])
+        XCTAssertNil(IntunePackageUploader.appBody(request(script: "  \n"))["preInstallScript"])
+        XCTAssertNil(IntunePackageUploader.appBody(request(script: "#!/bin/bash\n"), includePreInstallScript: false)["preInstallScript"])
+    }
+
+    private func makePackage() throws -> (URL, URL) {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("IntuneScriptTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let package = directory.appendingPathComponent("Enrollment-1.0.0.pkg")
+        try Data(repeating: 7, count: 300).write(to: package)
+        return (directory, package)
+    }
+
+    func testUploadSendsTheScriptWithTheNewApp() async throws {
+        let (directory, package) = try makePackage()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let transport = ScriptedTransport()
+        var uploader = IntunePackageUploader(transport: transport)
+        uploader.sleep = { _ in }
+        let result = try await uploader.upload(request: request(script: "#!/bin/bash\nexit 0\n", package: package), token: "t") { _, _ in }
+        XCTAssertTrue(result.preInstallScriptAdded)
+        let first = try XCTUnwrap(transport.bodies.first ?? nil)
+        XCTAssertTrue(String(decoding: first, as: UTF8.self).contains("preInstallScript"))
+    }
+
+    func testUploadWithoutAScriptReportsNoScript() async throws {
+        let (directory, package) = try makePackage()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var uploader = IntunePackageUploader(transport: ScriptedTransport())
+        uploader.sleep = { _ in }
+        let result = try await uploader.upload(request: request(script: nil, package: package), token: "t") { _, _ in }
+        XCTAssertFalse(result.preInstallScriptAdded)
+    }
+
+    func testUploadRetriesWithoutTheScriptWhenIntuneRefusesIt() async throws {
+        let (directory, package) = try makePackage()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let transport = ScriptedTransport()
+        transport.rejectPreInstallScript = true
+        var uploader = IntunePackageUploader(transport: transport)
+        uploader.sleep = { _ in }
+        let result = try await uploader.upload(request: request(script: "#!/bin/bash\nexit 0\n", package: package), token: "t") { _, _ in }
+        XCTAssertFalse(result.preInstallScriptAdded, "The app exists, but without the script, and the result says so")
+        XCTAssertEqual(result.appID, "app-1")
+        let creations = transport.requests.enumerated().filter { $0.element.method == "POST" && $0.element.url.hasSuffix("/mobileApps") }
+        XCTAssertEqual(creations.count, 2)
+        let retryBody = try XCTUnwrap(transport.bodies[creations[1].offset])
+        XCTAssertFalse(String(decoding: retryBody, as: UTF8.self).contains("preInstallScript"))
+    }
+}
+

@@ -76,6 +76,9 @@ struct TaskExecutionOptions: Codable, Equatable {
     /// Task identifiers this task waits for.
     var dependencies: [String] = []
     var executionOrder: Int = 100
+    /// Where new applications start. Scripts are numbered from 100 upward (see `nextScriptExecutionOrder`), so
+    /// by default scripts run before applications; final validation stays last at 900.
+    static let defaultApplicationOrder = 500
     /// Tasks with the same non-empty group name may run concurrently. Empty means sequential.
     var parallelGroup: String = ""
     /// Whether a "Skipped" result is acceptable for a required task.
@@ -112,6 +115,7 @@ struct ApplicationItem: Codable, Equatable, Identifiable {
         var execution = TaskExecutionOptions()
         execution.isRequired = false
         execution.timeoutSeconds = timeoutSeconds
+        execution.executionOrder = TaskExecutionOptions.defaultApplicationOrder
         return ApplicationItem(
             id: UUID(),
             taskIdentifier: "",

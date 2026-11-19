@@ -150,6 +150,8 @@ enum PreviewBuilder {
 
     private static func collectMembers(_ project: EnrollmentProject) -> [PreviewMember] {
         var members: [PreviewMember] = []
+        // A script an application runs as part of its own task has no row of its own.
+        let foldedScripts = TaskPlanner.foldedScripts(in: project)
         for group in project.applicationGroups {
             for application in group.applications where application.isEnabled {
                 let item = PreviewListItem(
@@ -168,7 +170,7 @@ enum PreviewBuilder {
                 members.append(PreviewMember(item: item, groupID: group.id, messages: application.execution.messages, isFinalValidation: false))
             }
         }
-        for script in project.scripts {
+        for script in project.scripts where foldedScripts[script.taskIdentifier] == nil {
             let item = PreviewListItem(
                 id: script.taskIdentifier,
                 title: script.displayName,

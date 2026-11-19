@@ -9,6 +9,10 @@
 			<string>Enrollment Project</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>enrollmentproject</string>
+			</array>
 			<key>LSHandlerRank</key>
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>

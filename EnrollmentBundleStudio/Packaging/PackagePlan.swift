@@ -10,6 +10,8 @@ struct PackagePlan: Equatable {
     let packageVersion: String
     let installLocation: String
     let launchDaemonLabel: String
+    /// The placeholder app that Intune detects.
+    let detectionApp: FrameworkGenerator.DetectionApp
     /// Final package location in the output folder.
     let packageURL: URL
     /// The build report written next to the package.
@@ -21,6 +23,7 @@ struct PackagePlan: Equatable {
         packageVersion = settings.packageVersion
         installLocation = FrameworkGenerator.trimmedDirectory(settings.installLocation)
         launchDaemonLabel = settings.bundleIdentifier
+        detectionApp = FrameworkGenerator.detectionApp(project: project)
         let baseName = "\(FilenameSanitizer.sanitize(settings.packageDisplayName, fallback: "EnrollmentBundle"))-\(settings.packageVersion)"
         packageURL = outputDirectory.appendingPathComponent("\(baseName).pkg")
         reportURL = outputDirectory.appendingPathComponent("\(baseName)-build-report.txt")
@@ -30,6 +33,12 @@ struct PackagePlan: Equatable {
     /// install location without its leading slash.
     func payloadFrameworkDirectory(in payload: URL) -> URL {
         payload.appendingPathComponent(String(installLocation.drop { $0 == "/" }), isDirectory: true)
+    }
+
+    func payloadDetectionApp(in payload: URL) -> URL {
+        payload
+            .appendingPathComponent(String(detectionApp.directory.drop { $0 == "/" }), isDirectory: true)
+            .appendingPathComponent(detectionApp.name, isDirectory: true)
     }
 
     func payloadLaunchDaemon(in payload: URL) -> URL {
@@ -58,7 +67,8 @@ struct PackagePlan: Equatable {
             "\(framework)/uninstall.sh",
             "\(framework)/config/enrollment.conf",
             "\(framework)/lib/task-runner.sh",
-            "./Library/LaunchDaemons/\(launchDaemonLabel).plist"
+            "./Library/LaunchDaemons/\(launchDaemonLabel).plist",
+            "./" + String(detectionApp.path.drop { $0 == "/" }) + "/Contents/Info.plist"
         ]
     }
 }

@@ -77,7 +77,7 @@ struct ApplicationsView: View {
         }
         .sheet(isPresented: $isCatalogPresented) {
             CatalogPickerSheet(project: document.project) { entries, target in
-                document.addCatalogEntries(entries, target: target)
+                document.addCatalogEntries(entries, target: target, applicationIconData: AppIconExtractor.applicationIconPNG(atPath:))
             }
         }
         .sheet(item: $editContext) { context in
@@ -124,6 +124,13 @@ struct ApplicationsView: View {
             } label: {
                 Label("New Group", systemImage: "folder.badge.plus")
             }
+            Button {
+                embedApplicationIcons()
+            } label: {
+                Label("Embed App Icons", systemImage: "photo.on.rectangle")
+            }
+            .disabled(document.isReadOnly)
+            .help("Copies the icons of the apps installed on this Mac into the project, so they show in the dialog before the apps reach the new Mac.")
             Spacer()
             Text(summaryText)
                 .font(.callout)
@@ -371,6 +378,26 @@ struct ApplicationsView: View {
     }
 
     /// Applies an editor result as one change, so it is a single undo step.
+    /// Embeds the icons of apps installed on this Mac for every application that still uses "Installed app icon".
+    private func embedApplicationIcons() {
+        var updated = document
+        let result = updated.embedLocalApplicationIcons(iconData: AppIconExtractor.applicationIconPNG(atPath:))
+        if !result.embedded.isEmpty {
+            document = updated
+        }
+        var lines: [String] = []
+        if !result.embedded.isEmpty {
+            lines.append("Embedded the icon of \(result.embedded.count) app(s): \(result.embedded.joined(separator: ", ")).")
+        }
+        if !result.notFound.isEmpty {
+            lines.append("Not installed on this Mac, so no icon could be read: \(result.notFound.joined(separator: ", ")). Choose a project image for these, or install them here and run this again.")
+        }
+        if lines.isEmpty {
+            lines.append("Every application already has an embedded or custom icon.")
+        }
+        workspace.alert = AppAlert(title: "Embed App Icons", message: lines.joined(separator: "\n\n"))
+    }
+
     private func save(_ result: ApplicationEditResult, context: ApplicationEditContext) {
         var updated = document
         do {

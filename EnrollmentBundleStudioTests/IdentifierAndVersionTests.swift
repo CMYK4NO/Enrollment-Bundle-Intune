@@ -12,7 +12,7 @@ final class IdentifierAndVersionTests: XCTestCase {
     }
 
     func testSuggestedIdentifiersAreValidReverseDNS() {
-        for name in ["Contoso", "3M", "A", "Acme Inc."] {
+        for name in ["Contoso", "3M", "A", "Example Inc."] {
             XCTAssertTrue(FieldValidator.isValidReverseDNS(IdentifierSuggestion.packageIdentifier(forOrganization: name)), name)
             XCTAssertTrue(FieldValidator.isValidReverseDNS(IdentifierSuggestion.bundleIdentifier(forOrganization: name)), name)
         }

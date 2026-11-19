@@ -36,6 +36,7 @@ struct GeneratedFramework {
 enum FrameworkGeneratorError: LocalizedError, Equatable {
     case noTasks
     case invalidTaskIdentifier(String)
+    case invalidBundleIdentifier(String)
     case missingAsset(String)
     case missingInstaller(String)
 
@@ -45,6 +46,8 @@ enum FrameworkGeneratorError: LocalizedError, Equatable {
             return "The project has no enabled tasks to generate."
         case .invalidTaskIdentifier(let id):
             return "The task identifier \"\(id)\" contains characters the framework does not accept."
+        case .invalidBundleIdentifier(let id):
+            return "The bundle identifier \"\(id)\" is not a valid reverse-DNS identifier."
         case .missingAsset(let path):
             return "The project file \(path) is missing."
         case .missingInstaller(let path):
@@ -85,6 +88,10 @@ enum FrameworkGenerator {
         now: Date = Date()
     ) throws -> GeneratedFramework {
         let settings = project.settings
+        // It names the LaunchDaemon and its property list, so never let an invalid value reach a file name.
+        guard FieldValidator.isValidReverseDNS(settings.bundleIdentifier) else {
+            throw FrameworkGeneratorError.invalidBundleIdentifier(settings.bundleIdentifier)
+        }
         let installDirectory = trimmedDirectory(settings.installLocation)
         let plan = TaskPlanner.plan(project)
         let analysis = DependencyGraph.analyze(plan)
@@ -133,6 +140,11 @@ enum FrameworkGenerator {
         for path in Set(imagePaths).sorted() {
             guard let data = assets[path] else { throw FrameworkGeneratorError.missingAsset(path) }
             addData("\(framework)/\(iconRelativePath(for: path))", data)
+        }
+        // The desktop wallpaper travels inside the framework and is copied to /Library/Desktop Pictures on the device.
+        if let wallpaper = project.branding.wallpaperPath {
+            guard let data = assets[wallpaper] else { throw FrameworkGeneratorError.missingAsset(wallpaper) }
+            addData("\(framework)/\(wallpaperRelativePath(project: project, assetPath: wallpaper))", data)
         }
         // Resolved by lib/dialog.sh to the folder the framework runs from, so images always match the files.
         func deviceIcon(_ assetPath: String) -> String {
@@ -222,6 +234,14 @@ enum FrameworkGenerator {
                 lines.append(ShellQuoting.assignment("TASK_DETECTION_VALUE", application.detection.value))
                 lines.append(ShellQuoting.assignment("TASK_INSTALLER", installerPath))
                 lines.append(ShellQuoting.assignment("TASK_INSTALLER_SHA256", installerHash))
+                // "Run custom script": the linked script runs first, then the app is detected (see run_app_script_task).
+                if let script = TaskPlanner.linkedScript(of: application, in: project) {
+                    guard let data = assets[script.relativePath] else { throw FrameworkGeneratorError.missingAsset(script.relativePath) }
+                    let name = (script.relativePath as NSString).lastPathComponent
+                    addData("\(framework)/scripts/\(name)", data, executable: true)
+                    lines.append(ShellQuoting.assignment("TASK_SCRIPT", "scripts/\(name)"))
+                    lines.append(ShellQuoting.assignment("TASK_SUCCESS_CODES", script.successExitCodes.map(String.init).joined(separator: " ")))
+                }
             case .script(let id):
                 guard let script = project.script(id: id) else { continue }
                 guard let data = assets[script.relativePath] else { throw FrameworkGeneratorError.missingAsset(script.relativePath) }
@@ -258,6 +278,10 @@ enum FrameworkGenerator {
         addData("launchd/\(settings.bundleIdentifier).plist", try launchDaemon(project: project, installDirectory: installDirectory))
         add("package-scripts/preinstall", packageScript(FrameworkTemplates.preinstallScript, project: project, installDirectory: installDirectory), executable: true)
         add("package-scripts/postinstall", packageScript(FrameworkTemplates.postinstallScript, project: project, installDirectory: installDirectory), executable: true)
+        for file in try detectionAppFiles(project: project) {
+            files.append(file)
+        }
+        add("\(intuneDirectory)/\(intunePreInstallFileName)", intunePreInstallScript(project: project), executable: true)
         add("README.txt", readme(project: project, installDirectory: installDirectory))
 
         return GeneratedFramework(
@@ -300,6 +324,20 @@ enum FrameworkGenerator {
             return "icons/branding-\(name)"
         }
         return "icons/\(name)"
+    }
+
+    /// Folder on the device where the wallpaper is placed so it outlives the framework (uninstall.sh keeps it).
+    static let wallpaperDeviceDirectory = "/Library/Desktop Pictures"
+
+    /// File name for the wallpaper, for example "Contoso-Wallpaper.jpg". Used inside the framework and on the device.
+    static func wallpaperFileName(project: EnrollmentProject, assetPath: String) -> String {
+        let base = FilenameSanitizer.sanitize("\(project.settings.organizationName) Wallpaper", fallback: "Corporate-Wallpaper")
+        let pathExtension = (assetPath as NSString).pathExtension.lowercased()
+        return "\(base).\(pathExtension.isEmpty ? "jpg" : pathExtension)"
+    }
+
+    static func wallpaperRelativePath(project: EnrollmentProject, assetPath: String) -> String {
+        "wallpaper/\(wallpaperFileName(project: project, assetPath: assetPath))"
     }
 
     static func trimmedDirectory(_ path: String) -> String {
@@ -351,12 +389,34 @@ enum FrameworkGenerator {
             ShellQuoting.assignment("onboarding_flag", settings.onboardingFlagPath),
             ShellQuoting.assignment("enrollment_window_hours", settings.enrollmentWindowHours),
             ShellQuoting.assignment("button_text", branding.buttonText),
+            ShellQuoting.assignment("completion_command", branding.completionCommand.trimmingCharacters(in: .whitespacesAndNewlines)),
+            ShellQuoting.assignment("completion_command_as_user", branding.completionCommandRunsAsUser),
             ShellQuoting.assignment("completion_icon", "SF=\(branding.completionSymbol)"),
             ShellQuoting.assignment("msg_welcome", normalize(branding.welcomeMessage)),
             ShellQuoting.assignment("msg_completion", normalize(branding.completionMessage)),
             ShellQuoting.assignment("msg_warning", normalize(branding.warningMessage)),
             ShellQuoting.assignment("msg_failure", normalize(branding.failureMessage))
         ]
+        if let wallpaper = branding.wallpaperPath {
+            lines.append(ShellQuoting.assignment("wallpaper_source", wallpaperRelativePath(project: project, assetPath: wallpaper)))
+            lines.append(ShellQuoting.assignment("wallpaper_target",
+                                                 "\(wallpaperDeviceDirectory)/\(wallpaperFileName(project: project, assetPath: wallpaper))"))
+        }
+        if let dock = project.dock, dock.isEnabled {
+            let items = dock.resolvedItems(in: project)
+            lines.append(ShellQuoting.assignment("dock_enabled", true))
+            lines.append(ShellQuoting.assignment("dock_remove_default", dock.removeDefaultItems))
+            lines.append(ShellQuoting.assignment("dock_position", dock.position.rawValue))
+            lines.append(ShellQuoting.assignment("dock_tile_size", min(max(dock.tileSize, DockConfiguration.tileSizeRange.lowerBound), DockConfiguration.tileSizeRange.upperBound)))
+            lines.append(ShellQuoting.assignment("dock_autohide", dock.autoHide))
+            lines.append(ShellQuoting.assignment("dock_fingerprint", dock.fingerprint(in: project)))
+            lines.append(ShellQuoting.assignment("dock_item_count", items.count))
+            for (index, item) in items.enumerated() {
+                lines.append(ShellQuoting.assignment("dock_item_\(index + 1)_label", item.label))
+                lines.append(ShellQuoting.assignment("dock_item_\(index + 1)_path", item.path))
+            }
+        }
+        lines.append(ShellQuoting.assignment("detection_app", detectionApp(project: project).path))
         lines.append("")
         return lines.joined(separator: "\n")
     }
@@ -392,6 +452,67 @@ enum FrameworkGenerator {
         return try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     }
 
+    // MARK: Detection placeholder app
+
+    /// Export folder with the detection placeholder app; the package builder places it on the device.
+    static let detectionDirectory = "detection"
+    static let detectionExecutableName = "marker"
+
+    /// Name, device folder and full path of the placeholder app Intune detects.
+    struct DetectionApp: Equatable {
+        let name: String
+        let directory: String
+        var path: String { directory == "/" ? "/\(name)" : "\(directory)/\(name)" }
+    }
+
+    static func detectionApp(project: EnrollmentProject) -> DetectionApp {
+        let organization = project.settings.organizationName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = organization.isEmpty ? "Enrollment Bundle" : "\(organization) Bundle"
+        let configured = (project.settings.detectionAppDirectory ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let directory = configured.isEmpty ? project.settings.installLocation : configured
+        return DetectionApp(name: FilenameSanitizer.sanitize(base, fallback: "Enrollment-Bundle") + ".app",
+                            directory: trimmedDirectory(directory))
+    }
+
+    /// A small app bundle (Info.plist and an executable that does nothing) whose bundle identifier and version are
+    /// the package's. The package contains no other app, so Intune uses this one to see that the package is installed.
+    static func detectionAppFiles(project: EnrollmentProject) throws -> [GeneratedFile] {
+        let app = detectionApp(project: project)
+        let settings = project.settings
+        let name = (app.name as NSString).deletingPathExtension
+        let plist: [String: Any] = [
+            "CFBundleIdentifier": settings.packageIdentifier,
+            "CFBundleName": name,
+            "CFBundleDisplayName": name,
+            "CFBundleShortVersionString": settings.packageVersion,
+            "CFBundleVersion": settings.packageVersion,
+            "CFBundleExecutable": detectionExecutableName,
+            "CFBundlePackageType": "APPL",
+            "CFBundleInfoDictionaryVersion": "6.0",
+            "LSMinimumSystemVersion": settings.minimumMacOSVersion,
+            "LSUIElement": true,
+            "LSBackgroundOnly": true
+        ]
+        let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        let root = "\(detectionDirectory)/\(app.name)/Contents"
+        return [
+            GeneratedFile(path: "\(root)/Info.plist", contents: data, isExecutable: false),
+            GeneratedFile(path: "\(root)/MacOS/\(detectionExecutableName)",
+                          contents: Data("#!/bin/sh\n# Placeholder so Intune can detect the enrollment package. It does nothing.\nexit 0\n".utf8),
+                          isExecutable: true)
+        ]
+    }
+
+    /// Export folder holding files that are not part of the installer package but are used when deploying it.
+    static let intuneDirectory = "intune"
+    static let intunePreInstallFileName = "pre-install.sh"
+
+    /// The Intune pre-install script for this project: skips the install on Macs that already have the onboarding flag.
+    static func intunePreInstallScript(project: EnrollmentProject) -> String {
+        FrameworkTemplates.intunePreInstallScript
+            .replacingOccurrences(of: "__ONBOARDING_FLAG__", with: ShellQuoting.singleQuoted(project.settings.onboardingFlagPath))
+    }
+
     static func packageScript(_ template: String, project: EnrollmentProject, installDirectory: String) -> String {
         template
             .replacingOccurrences(of: "__LAUNCHD_LABEL__", with: ShellQuoting.singleQuoted(project.settings.bundleIdentifier))
@@ -409,6 +530,8 @@ enum FrameworkGenerator {
           framework/         installs to \(installDirectory)
           launchd/           \(label).plist installs to /Library/LaunchDaemons
           package-scripts/   preinstall and postinstall for the installer package
+          detection/         placeholder app that Intune detects; installs to \(detectionApp(project: project).directory)
+          intune/            pre-install.sh for the Intune app's Pre-install script setting (not in the package)
 
         Package Builder builds these files into an unsigned flat installer package. To test by hand on a
         test Mac, open Terminal in this folder (the one containing this README) and run:

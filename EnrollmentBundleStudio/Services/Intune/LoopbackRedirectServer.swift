@@ -3,15 +3,18 @@ import Network
 
 /// A one-shot HTTP listener on the loopback interface that receives the browser's sign-in redirect
 /// (http://localhost:<port>/?code=...). It accepts connections from this Mac only and stops after the first
-/// request that carries a code or an error.
+/// request that carries a code or an error together with the state of this sign-in. Requests with another state
+/// (a stale browser tab, or another program on this Mac) are answered and ignored, so they cannot end the sign-in.
 final class LoopbackRedirectServer: @unchecked Sendable {
     private let listener: NWListener
+    private let expectedState: String
     private let queue = DispatchQueue(label: "EnrollmentBundleStudio.loopback")
     // All mutable state below is touched only on `queue`.
     private var result: Result<AuthorizationResponse, Error>?
     private var continuation: CheckedContinuation<AuthorizationResponse, Error>?
 
-    init() throws {
+    init(expectedState: String) throws {
+        self.expectedState = expectedState
         let parameters = NWParameters.tcp
         parameters.requiredInterfaceType = .loopback
         listener = try NWListener(using: parameters, on: .any)
@@ -81,10 +84,12 @@ final class LoopbackRedirectServer: @unchecked Sendable {
         connection.start(queue: queue)
         connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) { [weak self] data, _, _, _ in
             let head = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            let response = RedirectParser.parse(requestHead: head)
-            let status = response == nil ? "404 Not Found" : "200 OK"
+            let parsed = RedirectParser.parse(requestHead: head)
+            let matches = parsed?.state != nil && parsed?.state == self?.expectedState
+            let response = matches ? parsed : nil
+            let status = response != nil ? "200 OK" : (parsed != nil ? "400 Bad Request" : "404 Not Found")
             let page = response == nil
-                ? "Not found."
+                ? (parsed != nil ? "This sign-in response does not belong to the current sign-in." : "Not found.")
                 : "<html><body style=\"font-family:-apple-system,sans-serif;margin:3em\"><h2>You can close this window</h2><p>Return to Enrollment Bundle Studio to continue.</p></body></html>"
             let body = Data(page.utf8)
             var reply = Data("HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8)

@@ -133,7 +133,7 @@ final class TaskPlannerTests: XCTestCase {
         let task = try XCTUnwrap(project.systemTask(id: id))
         XCTAssertEqual(task.taskIdentifier, "system.wait-condition")
         XCTAssertEqual(task.validation?.method, .customCommand)
-        XCTAssertEqual(project.nextExecutionOrder, 120)
+        XCTAssertEqual(project.nextExecutionOrder, 520)
 
         var options = try XCTUnwrap(project.executionOptions(forTask: task.taskIdentifier))
         options.dependencies = ["app.microsoft-company-portal"]

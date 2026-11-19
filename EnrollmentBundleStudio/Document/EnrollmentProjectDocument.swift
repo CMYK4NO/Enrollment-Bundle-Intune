@@ -48,6 +48,13 @@ struct EnrollmentProjectDocument: FileDocument, Equatable {
         self.installerSources = [:]
     }
 
+    /// A new project that starts from the saved app-wide runtime settings.
+    init(settingsDefaults: RuntimeSettingsDefaults) {
+        var project = EnrollmentProject.makeDefault()
+        settingsDefaults.apply(to: &project.settings)
+        self.init(project: project)
+    }
+
     init(configuration: ReadConfiguration) throws {
         try self.init(fileWrapper: configuration.file)
     }
@@ -174,6 +181,9 @@ struct EnrollmentProjectDocument: FileDocument, Equatable {
         if let overlay = project.branding.overlayIconPath, !isUsable(overlay, label: "Overlay icon") {
             project.branding.overlayIconPath = nil
         }
+        if let wallpaper = project.branding.wallpaperPath, !isUsable(wallpaper, label: "Desktop wallpaper") {
+            project.branding.wallpaperPath = nil
+        }
         for groupIndex in project.applicationGroups.indices {
             for itemIndex in project.applicationGroups[groupIndex].applications.indices {
                 let application = project.applicationGroups[groupIndex].applications[itemIndex]
@@ -281,11 +291,16 @@ struct EnrollmentProjectDocument: FileDocument, Equatable {
                 wrapper.preferredFilename = name
                 _ = directory.addFileWrapper(wrapper)
             } else if let url = source.sourceURL {
-                if let existing { directory.removeFileWrapper(existing) }
                 let didAccess = url.startAccessingSecurityScopedResource()
                 defer {
                     if didAccess { url.stopAccessingSecurityScopedResource() }
                 }
+                // An earlier save already copied the package into the project. If the original has since been moved
+                // or deleted, keep that copy instead of failing every later save. Builds still verify its SHA-256.
+                if let existing, existing.isRegularFile, !FileManager.default.isReadableFile(atPath: url.path) {
+                    continue
+                }
+                if let existing { directory.removeFileWrapper(existing) }
                 let file = try FileWrapper(url: url, options: [])
                 file.preferredFilename = name
                 _ = directory.addFileWrapper(file)
@@ -356,6 +371,9 @@ struct EnrollmentProjectDocument: FileDocument, Equatable {
         case .overlay:
             previous = project.branding.overlayIconPath
             project.branding.overlayIconPath = path
+        case .wallpaper:
+            previous = project.branding.wallpaperPath
+            project.branding.wallpaperPath = path
         }
         if previous != path {
             removeAssetIfUnreferenced(previous)
@@ -470,6 +488,9 @@ struct EnrollmentProjectDocument: FileDocument, Equatable {
         case .overlay:
             previous = project.branding.overlayIconPath
             project.branding.overlayIconPath = nil
+        case .wallpaper:
+            previous = project.branding.wallpaperPath
+            project.branding.wallpaperPath = nil
         }
         removeAssetIfUnreferenced(previous)
     }

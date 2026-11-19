@@ -39,6 +39,9 @@ struct ProjectSettings: Codable, Equatable {
     var onboardingFlagPath: String
     /// A normal run only starts on Macs whose MDM enrollment is at most this many hours old (needs the onboarding flag).
     var enrollmentWindowHours: Int
+    /// Folder on the device that receives the small placeholder app Intune uses to detect the package. Nil or empty
+    /// means the install location. Optional so projects saved before this setting existed open unchanged.
+    var detectionAppDirectory: String? = nil
 
     static let supportedMinimumMacOSVersions: [MacOSRelease] = [
         MacOSRelease(version: "26.0", name: "macOS Tahoe 26"),
@@ -57,7 +60,7 @@ struct ProjectSettings: Codable, Equatable {
 
     static func makeDefault() -> ProjectSettings {
         ProjectSettings(
-            projectName: "New Enrollment",
+            projectName: "Enrollment Bundle",
             organizationName: "",
             bundleIdentifier: "com.example.enrollment",
             packageIdentifier: "com.example.enrollment.bundle",
@@ -92,12 +95,18 @@ struct Branding: Codable, Equatable {
     var failureMessage: String
     var buttonText: String
     var inProgressButtonText: String
+    /// Shell command the generated framework runs after the user clicks the completion button. Empty means none.
+    var completionCommand: String
+    /// True runs the command as the console user (right for opening apps or URLs); false runs it as root.
+    var completionCommandRunsAsUser: Bool
     /// Relative path inside Branding/, or nil.
     var logoPath: String?
     /// Relative path inside Branding/, or nil.
     var bannerPath: String?
     /// Relative path inside Branding/, or nil. Shown as a small badge over the dialog icon.
     var overlayIconPath: String?
+    /// Relative path inside Branding/, or nil. PNG or JPEG applied once as the desktop wallpaper on each Mac.
+    var wallpaperPath: String?
     var accentColor: HexColor
     /// SF Symbol shown when enrollment completes.
     var completionSymbol: String
@@ -117,13 +126,16 @@ struct Branding: Codable, Equatable {
             failureMessage: "Some required items could not be set up. Please contact IT support.",
             buttonText: "Get Started",
             inProgressButtonText: "Please wait",
+            completionCommand: "open -a \"Company Portal\"",
+            completionCommandRunsAsUser: true,
             logoPath: nil,
             bannerPath: nil,
             overlayIconPath: nil,
+            wallpaperPath: nil,
             accentColor: HexColor(hex: "#0A64D2"),
             completionSymbol: "checkmark.seal.fill",
             showDeviceInfo: true,
-            infoboxTemplate: "**Computer:** {computername}\n**Model:** {computermodel}\n**macOS:** {osname} {osversion}\n**Serial:** {serialnumber}",
+            infoboxTemplate: "**Username:** {username}\n**Computer:** {computername}\n**Model:** {computermodel}\n**macOS:** {osname} {osversion}\n**Serial:** {serialnumber}",
             supportContact: "",
             supportURL: "",
             blurScreen: true
@@ -147,6 +159,8 @@ struct EnrollmentProject: Codable, Equatable {
     var applicationGroups: [ApplicationGroup]
     var scripts: [ScriptItem]
     var systemTasks: [EnrollmentTask]
+    /// The Dock set up after enrollment, or nil when the project never configured one (schema-compatible addition).
+    var dock: DockConfiguration?
 
     static func makeDefault(now: Date = Date()) -> EnrollmentProject {
         let timestamp = ProjectCoding.wholeSeconds(now)

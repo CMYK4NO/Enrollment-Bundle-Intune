@@ -30,7 +30,7 @@ enum FrameworkTemplates {
 # swiftDialog : must be at least dialog_min_version (config/enrollment.conf). If missing or too old
 #               the dialog is skipped, the problem is logged, and tasks continue.
 # Logs        : /Library/Logs/Microsoft/IntuneScripts/onBoarding/, one per run, newest 10 kept,
-#               mode 600 because they contain the console user name.
+#               mode 644 so the user can read them.
 #
 # Usage:
 #   enrollment.sh             Normal production run. This is how launchd and Intune run it.
@@ -42,8 +42,8 @@ enum FrameworkTemplates {
 #   Manual testing: sudo "/Library/Application Support/<Organization>/Enrollment/enrollment.sh" --dry-run
 #
 # Onboarding flag: onboarding_flag (config) is written after success or success with warnings. When it
-#               already exists the run is skipped (unless --force). The Intune pre-install script checks the
-#               same file, so the package is only installed on Macs that have not been onboarded.
+#               already exists the run is skipped (unless --force): no dialog, tasks, wallpaper or Dock changes.
+#               The package itself still installs its files on such a Mac; only this script honours the flag.
 #
 # Exit codes: 0 = success or nothing to do; 1 = failure, interrupted or deferred (runs again later).
 
@@ -285,6 +285,20 @@ main() {
                 log "DRY-RUN: a normal run would skip: $enrollment_window_reason (use --force to run anyway)."
             fi
         fi
+        if [ -n "${wallpaper_source:-}" ]; then
+            if [ "$(state_read wallpaper.applied)" = "$(wallpaper_fingerprint "$script_dir/$wallpaper_source")" ]; then
+                log "DRY-RUN: the wallpaper was already applied; it would be left alone."
+            else
+                log "DRY-RUN: the wallpaper would be copied to $wallpaper_target and applied for the console user."
+            fi
+        fi
+        if [ "${dock_enabled:-0}" = "1" ]; then
+            if [ -n "${dock_fingerprint:-}" ] && [ "$(state_read dock.applied)" = "$dock_fingerprint" ]; then
+                log "DRY-RUN: the Dock was already configured; it would be left alone."
+            else
+                log "DRY-RUN: after a successful enrollment the Dock would be set up with ${dock_item_count:-0} app(s); apps that are not installed are skipped."
+            fi
+        fi
         dry_run_report
         intune_result "DRY-RUN" "Checked $(count_lines "$(task_files)") task(s); nothing changed" "bundle=$bundle_version"
         return 0
@@ -342,12 +356,17 @@ main() {
         dialog_collect_values
     fi
 
+    apply_wallpaper || true
     run_all_tasks
     outcome="$(evaluate_outcome)"
     log "Outcome: $outcome"
     state_write completion "$outcome"
+    case "$outcome" in
+        success|warnings) apply_dock || true ;;
+    esac
     dialog_finish "$outcome"
     dialog_wait_for_exit 3600
+    dialog_run_completion_command "$outcome"
 
     case "$outcome" in
         success)
@@ -487,6 +506,28 @@ if [ -n "${onboarding_flag:-}" ] && [ -f "$onboarding_flag" ]; then
     log "Keeping the onboarding flag $onboarding_flag so this Mac is not onboarded again. Remove it by hand to allow re-onboarding."
 fi
 safe_remove_dir "$state_dir" || failures=$((failures + 1))
+# The detection placeholder app. One inside the install directory goes with it; one elsewhere is removed here,
+# and only when the path is an absolute .app path without "..".
+case "${detection_app:-}" in
+    "$install_dir"/*) ;;
+    /*.app)
+        case "$detection_app" in
+            *..*) log_warn "Not removing the detection app, its path contains '..': $detection_app" ;;
+            *)
+                if [ -d "$detection_app" ]; then
+                    if is_true "$dry_run"; then
+                        log "DRY-RUN: would remove $detection_app"
+                    elif rm -rf "$detection_app"; then
+                        log "Removed $detection_app"
+                    else
+                        log_error "Could not remove $detection_app"
+                        failures=$((failures + 1))
+                    fi
+                fi
+                ;;
+        esac
+        ;;
+esac
 safe_remove_dir "$install_dir" || failures=$((failures + 1))
 
 if [ "$failures" -gt 0 ]; then
@@ -624,26 +665,37 @@ file_is_root_protected() {
     return 0
 }
 
-# safe_remove_dir PATH - removes a directory only when the path is absolute, deep enough and not a system folder.
-safe_remove_dir() {
+# unsafe_directory_reason PATH - succeeds and prints a reason when PATH must never be changed recursively
+# (relative, contains .., a system folder, or too shallow).
+unsafe_directory_reason() {
     local target="$1" depth
     case "$target" in
         /*) ;;
-        *) log_error "Refusing to remove relative path: $target"; return 1 ;;
+        *) printf 'relative path'; return 0 ;;
     esac
     case "$target" in
-        *..*) log_error "Refusing to remove path containing '..': $target"; return 1 ;;
+        *..*) printf "path containing '..'"; return 0 ;;
     esac
     case "$target" in
         / | /Library | /Library/ | /Applications | /Users | /System | /usr | /bin | /sbin | /private | /var | \
         "/Library/Application Support" | "/Library/Application Support/" | /Library/LaunchDaemons)
-            log_error "Refusing to remove protected path: $target"
-            return 1
+            printf 'protected path'
+            return 0
             ;;
     esac
     depth="$(printf '%s' "$target" | awk -F/ '{print NF-1}')"
     if [ "$depth" -lt 3 ]; then
-        log_error "Refusing to remove shallow path: $target"
+        printf 'shallow path'
+        return 0
+    fi
+    return 1
+}
+
+# safe_remove_dir PATH - removes a directory only when the path is absolute, deep enough and not a system folder.
+safe_remove_dir() {
+    local target="$1" reason
+    if reason="$(unsafe_directory_reason "$target")"; then
+        log_error "Refusing to remove $reason: $target"
         return 1
     fi
     if [ ! -e "$target" ]; then
@@ -662,20 +714,41 @@ safe_remove_dir() {
     return 1
 }
 
+# descendant_pids PID - prints every process below PID (children, then their children, and so on).
+descendant_pids() {
+    local child
+    for child in $(pgrep -P "$1" 2>/dev/null); do
+        printf '%s\n' "$child"
+        descendant_pids "$child"
+    done
+}
+
+# signal_pids SIGNAL PID... - sends SIGNAL to each process that still exists. Callers list descendants first,
+# because once a parent is gone its children are adopted by launchd and can no longer be found.
+signal_pids() {
+    local signal="$1" target
+    shift
+    for target in "$@"; do
+        kill "-$signal" "$target" 2>/dev/null
+    done
+    return 0
+}
+
 # run_with_timeout SECONDS COMMAND [ARGS...] - returns the command's exit code, or 124 on timeout.
 run_with_timeout() {
-    local seconds="$1" pid waited=0 rc
+    local seconds="$1" pid waited=0 rc family
     shift
     "$@" &
     pid=$!
     while kill -0 "$pid" 2>/dev/null; do
         if [ "$waited" -ge "$seconds" ]; then
             log_warn "Timed out after ${seconds}s: $1"
-            pkill -TERM -P "$pid" 2>/dev/null
-            kill -TERM "$pid" 2>/dev/null
+            family="$(descendant_pids "$pid")"
+            # shellcheck disable=SC2086
+            signal_pids TERM $family "$pid"
             sleep 2
-            pkill -KILL -P "$pid" 2>/dev/null
-            kill -KILL "$pid" 2>/dev/null
+            # shellcheck disable=SC2086
+            signal_pids KILL $family "$pid"
             wait "$pid" 2>/dev/null
             return 124
         fi
@@ -690,7 +763,7 @@ run_with_timeout() {
 
     static let libraryLogging = #"""
 # shellcheck shell=bash
-# logging.sh - Intune script logging standard. One new log per run, newest log_keep kept.
+# logging.sh - logging standard. One new log per run, newest log_keep kept.
 # Generated by Enrollment Bundle Studio. Sourced by enrollment.sh. Bash 3.2 compatible.
 
 appname="${appname:-onBoarding}"
@@ -733,7 +806,7 @@ log_error() {
 }
 
 # log_setup - creates the log directory and this run's log with explicit ownership and permissions.
-# Logs are 600 because they contain the console user name.
+# Logs are 644 so the console user can read them.
 log_setup() {
     if ! mkdir -p "$logandmetadir"; then
         printf '%s: cannot create %s\n' "$appname" "$logandmetadir" >&2
@@ -750,7 +823,7 @@ log_setup() {
         return 1
     fi
     chown root:wheel "$logfile" 2>/dev/null
-    chmod 600 "$logfile"
+    chmod 644 "$logfile"
     rotate_logs
     return 0
 }
@@ -793,6 +866,11 @@ state_task_file() {
 
 # state_init - creates the state directory, root-only.
 state_init() {
+    local reason
+    if reason="$(unsafe_directory_reason "$state_dir")"; then
+        log_error "Refusing to use $reason as the state directory: $state_dir"
+        return 1
+    fi
     if ! mkdir -p "$state_dir/tasks"; then
         log_error "Cannot create state directory $state_dir"
         return 1
@@ -982,6 +1060,175 @@ user_full_name() {
     name="$(id -F "$console_user" 2>/dev/null)"
     printf '%s' "${name:-$console_user}"
 }
+
+# wallpaper_fingerprint FILE - SHA-256 of the file, empty when it cannot be read.
+wallpaper_fingerprint() {
+    shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
+}
+
+# apply_wallpaper - sets the bundled desktop wallpaper for the console user. Never fatal.
+# The wallpaper is applied once per image: its SHA-256 is stored in the state directory after a successful
+# change, so a wallpaper the user picks afterwards is never replaced on later runs. Shipping a different
+# image in a later bundle version applies that image once. Needs a console user; otherwise it is skipped
+# and tried again on the next run.
+apply_wallpaper() {
+    local source target marker fingerprint
+    [ -n "${wallpaper_source:-}" ] || return 0
+    source="$script_dir/$wallpaper_source"
+    target="${wallpaper_target:-}"
+    marker="$state_dir/wallpaper.applied"
+    if [ -z "$target" ] || [ ! -f "$source" ]; then
+        log_warn "Wallpaper file is missing from the bundle ($source); skipping."
+        return 0
+    fi
+    fingerprint="$(wallpaper_fingerprint "$source")"
+    if [ -z "$fingerprint" ]; then
+        log_warn "Could not read the wallpaper file; skipping."
+        return 0
+    fi
+    # The scaling mode is part of the fingerprint, so a Mac that got the image with another mode gets it again.
+    fingerprint="$fingerprint:fill"
+    if [ "$(state_read wallpaper.applied)" = "$fingerprint" ]; then
+        log "Wallpaper already applied; leaving the current wallpaper alone."
+        return 0
+    fi
+    if [ -z "$console_user" ] || [ -z "$console_uid" ]; then
+        log "No console user yet; the wallpaper will be applied on a later run."
+        return 0
+    fi
+    # A copy outside the framework keeps the wallpaper working after uninstall.sh removes the framework.
+    if ! mkdir -p "$(dirname "$target")" || ! cp -f "$source" "$target"; then
+        log_warn "Could not copy the wallpaper to $target; skipping."
+        return 0
+    fi
+    chown root:wheel "$target" 2>/dev/null
+    chmod 644 "$target"
+    log "Applying wallpaper $target for $console_user."
+    # NSWorkspace sets the wallpaper in the user's session. It sends no Apple events, so macOS shows no
+    # "control System Events" prompt. The path is passed as an argument, so quotes or spaces in it are safe.
+    if run_with_timeout 60 launchctl asuser "$console_uid" /usr/bin/osascript -l JavaScript \
+        -e 'function run(argv) {' \
+        -e '  ObjC.import("AppKit");' \
+        -e '  var url = $.NSURL.fileURLWithPath(argv[0]);' \
+        -e '  var workspace = $.NSWorkspace.sharedWorkspace;' \
+        -e '  var screens = $.NSScreen.screens;' \
+        -e '  var options = $.NSMutableDictionary.dictionary;' \
+        -e '  options.setObjectForKey($.NSNumber.numberWithInt(3), $.NSWorkspaceDesktopImageScalingKey);' \
+        -e '  options.setObjectForKey($.NSNumber.numberWithBool(true), $.NSWorkspaceDesktopImageAllowClippingKey);' \
+        -e '  if (screens.count === 0) { throw new Error("no screen found"); }' \
+        -e '  for (var i = 0; i < screens.count; i++) {' \
+        -e '    var done = workspace.setDesktopImageURLForScreenOptionsError(url, screens.objectAtIndex(i), options, $());' \
+        -e '    if (!done) { throw new Error("screen " + i + " refused the wallpaper"); }' \
+        -e '  }' \
+        -e '}' "$target" >> "$logfile" 2>&1; then
+        state_write "$(basename "$marker")" "$fingerprint"
+        log "Wallpaper applied."
+    else
+        log_warn "The wallpaper could not be applied for $console_user; it is tried again on a later run."
+    fi
+    return 0
+}
+
+# dock_xml_escape TEXT - escapes &, < and > so the text can sit inside a property-list string.
+dock_xml_escape() {
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+# dock_tile LABEL PATH - one Dock application tile as an XML dictionary (the format "defaults -array" takes).
+dock_tile() {
+    local label path
+    label="$(dock_xml_escape "$1")"
+    path="$(dock_xml_escape "$2")"
+    printf '%s' "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>${path}</string><key>_CFURLStringType</key><integer>0</integer></dict><key>file-label</key><string>${label}</string></dict><key>tile-type</key><string>file-tile</string></dict>"
+}
+
+# dock_already_present PATH - succeeds when the console user's Dock already holds the application.
+dock_already_present() {
+    local encoded
+    encoded="$(replace_all "$1" " " "%20")"
+    run_as_user defaults read com.apple.dock persistent-apps 2>/dev/null | grep -F -- "$encoded" >/dev/null 2>&1
+}
+
+# dock_run COMMAND... - runs a command as the console user with a time limit, output to the log.
+dock_run() {
+    run_with_timeout 30 launchctl asuser "$console_uid" sudo -u "$console_user" "$@" >> "$logfile" 2>&1
+}
+
+# apply_dock - sets up the console user's Dock from the dock_* values in enrollment.conf. Never fatal.
+# The Dock is set up once per configuration: a fingerprint of the configuration is stored in the state
+# directory after a successful change, so a Dock the user rearranges afterwards is not replaced on later
+# runs. Shipping a changed Dock in a later bundle version applies it once. Applications that are not
+# installed are skipped. With dock_remove_default=1 the Dock shows only the listed apps; otherwise the
+# listed apps are added to the Dock the user already has. Needs a console user.
+apply_dock() {
+    local fingerprint i name label path resolved tile added=0 failed=0 tiles=()
+    [ "${dock_enabled:-0}" = "1" ] || return 0
+    fingerprint="${dock_fingerprint:-}"
+    if [ -n "$fingerprint" ] && [ "$(state_read dock.applied)" = "$fingerprint" ]; then
+        log "Dock already configured; leaving the current Dock alone."
+        return 0
+    fi
+    if [ -z "$console_user" ] || [ -z "$console_uid" ]; then
+        log "No console user; the Dock was not configured."
+        return 0
+    fi
+    i=1
+    while [ "$i" -le "${dock_item_count:-0}" ]; do
+        name="dock_item_${i}_label"
+        label="${!name:-}"
+        name="dock_item_${i}_path"
+        path="${!name:-}"
+        i=$((i + 1))
+        [ -n "$path" ] || continue
+        resolved="$(readlink -f "$path" 2>/dev/null)"
+        [ -d "$resolved" ] || resolved="$path"
+        if [ ! -d "$resolved" ]; then
+            log "Dock: skipped, not installed: $path"
+            continue
+        fi
+        if [ "${dock_remove_default:-1}" != "1" ] && dock_already_present "$resolved"; then
+            log "Dock: already in the Dock: $resolved"
+            continue
+        fi
+        tiles[${#tiles[@]}]="$(dock_tile "$label" "$resolved")"
+        log "Dock: will add $resolved"
+    done
+    if [ "${#tiles[@]}" -eq 0 ]; then
+        log "Dock: none of the configured apps need adding; the Dock was left unchanged."
+        # Nothing to add because everything is already there counts as done; nothing installed does not.
+        if [ "${dock_remove_default:-1}" != "1" ]; then
+            state_write dock.applied "$fingerprint"
+        fi
+        return 0
+    fi
+    if [ "${dock_remove_default:-1}" = "1" ]; then
+        dock_run defaults write com.apple.dock persistent-apps -array "${tiles[@]}" || failed=1
+        added="${#tiles[@]}"
+    else
+        for tile in "${tiles[@]}"; do
+            if dock_run defaults write com.apple.dock persistent-apps -array-add "$tile"; then
+                added=$((added + 1))
+            else
+                failed=1
+            fi
+        done
+    fi
+    dock_run defaults write com.apple.dock orientation -string "${dock_position:-bottom}" || failed=1
+    dock_run defaults write com.apple.dock tilesize -integer "${dock_tile_size:-54}" || failed=1
+    if [ "${dock_autohide:-0}" = "1" ]; then
+        dock_run defaults write com.apple.dock autohide -bool true || failed=1
+    else
+        dock_run defaults write com.apple.dock autohide -bool false || failed=1
+    fi
+    if [ "$failed" -ne 0 ]; then
+        log_warn "The Dock preferences could not all be written; the Dock will be tried again on the next run."
+        return 0
+    fi
+    dock_run /usr/bin/killall Dock || true
+    state_write dock.applied "$fingerprint"
+    log "Dock configured with $added app(s)."
+    return 0
+}
 """#
 
     static let libraryNetwork = #"""
@@ -1017,6 +1264,7 @@ wait_for_network() {
 
 dialog_active=0
 dialog_pid=""
+dialog_closed_by_user=0
 dialog_commandfile=""
 dialog_jsonfile=""
 dialog_unlocked=0
@@ -1088,42 +1336,65 @@ dialog_installed_ok() {
     [ -n "$version" ] && version_ge "$version" "$dialog_min_version"
 }
 
+# dialog_release_url TMPDIR - prints the download URL of the latest swiftDialog package. Tries the GitHub API first and,
+# when that fails (for example the 60 requests per hour limit on an office address shared by many Macs), reads the
+# release page instead, which is not rate limited.
+dialog_release_url() {
+    local tmp="$1" url="" tag
+    if curl -fsSL --connect-timeout 15 --max-time 60 -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" -o "$tmp/release.json" >> "$logfile" 2>&1; then
+        url="$(grep -o '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*\.pkg"' "$tmp/release.json" | head -n 1 | sed 's/^[^:]*:[[:space:]]*"//; s/"$//')"
+    else
+        log_warn "Could not read the swiftDialog release information from the GitHub API; trying the release page."
+    fi
+    if [ -z "$url" ]; then
+        tag="$(curl -fsSL --connect-timeout 15 --max-time 60 -o /dev/null -w '%{url_effective}' "https://github.com/swiftDialog/swiftDialog/releases/latest" 2>/dev/null)"
+        tag="${tag##*/}"
+        case "$tag" in
+            '' | *[!A-Za-z0-9._-]*) ;;
+            *)
+                if curl -fsSL --connect-timeout 15 --max-time 60 "https://github.com/swiftDialog/swiftDialog/releases/expanded_assets/$tag" -o "$tmp/assets.html" >> "$logfile" 2>&1; then
+                    url="$(grep -o 'href="/swiftDialog/swiftDialog/releases/download/[^"]*\.pkg"' "$tmp/assets.html" | head -n 1 | sed 's/^href="/https:\/\/github.com/; s/"$//')"
+                fi
+                ;;
+        esac
+    fi
+    printf '%s' "$url"
+}
+
 # dialog_install_once - downloads the latest official swiftDialog release package, verifies that it is signed
-# by the swiftDialog developer team and installs it. Returns non-zero on any failure.
+# by a trusted Developer ID of the swiftDialog developer team and installs it. Returns non-zero on any failure.
 dialog_install_once() {
-    local api="https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest"
     local team="${dialog_team_id:-PWA5E9TQ59}"
     local tmp url pkg signature rc=1
     tmp="$(mktemp -d /private/tmp/dialog-install.XXXXXX)" || { log_error "Cannot create a temporary folder for swiftDialog."; return 1; }
     pkg="$tmp/dialog.pkg"
-    if ! curl -fsSL --connect-timeout 15 --max-time 60 -H "Accept: application/vnd.github+json" "$api" -o "$tmp/release.json" >> "$logfile" 2>&1; then
-        log_warn "Could not read the swiftDialog release information."
-    else
-        url="$(grep -o '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*\.pkg"' "$tmp/release.json" | head -n 1 | sed 's/^[^:]*:[[:space:]]*"//; s/"$//')"
-        case "$url" in
-            https://github.com/swiftDialog/swiftDialog/releases/download/*)
-                log "Downloading swiftDialog from $url"
-                if ! curl -fsSL --connect-timeout 15 --max-time 600 "$url" -o "$pkg" >> "$logfile" 2>&1; then
-                    log_warn "swiftDialog download failed."
-                else
-                    signature="$(pkgutil --check-signature "$pkg" 2>&1)"
-                    if printf '%s' "$signature" | grep -q "($team)"; then
-                        log "swiftDialog package signature verified (team $team)."
-                        if installer -pkg "$pkg" -target / >> "$logfile" 2>&1; then
-                            rc=0
-                        else
-                            log_warn "installer failed for the swiftDialog package."
-                        fi
+    url="$(dialog_release_url "$tmp")"
+    case "$url" in
+        https://github.com/swiftDialog/swiftDialog/releases/download/*)
+            log "Downloading swiftDialog from $url"
+            if ! curl -fsSL --connect-timeout 15 --max-time 600 "$url" -o "$pkg" >> "$logfile" 2>&1; then
+                log_warn "swiftDialog download failed."
+            else
+                signature="$(pkgutil --check-signature "$pkg" 2>&1)"
+                # The status line proves macOS trusts the certificate chain; the team ID proves who signed it.
+                if printf '%s' "$signature" | grep -q "Status: signed by a developer certificate issued by Apple" \
+                    && printf '%s' "$signature" | grep -q "($team)"; then
+                    log "swiftDialog package signature verified (trusted Developer ID, team $team)."
+                    if installer -pkg "$pkg" -target / >> "$logfile" 2>&1; then
+                        rc=0
                     else
-                        log_error "swiftDialog package is not signed by team $team; not installing."
+                        log_warn "installer failed for the swiftDialog package."
                     fi
+                else
+                    log_error "swiftDialog package is not signed by a trusted Developer ID of team $team; not installing."
                 fi
-                ;;
-            *)
-                log_warn "No swiftDialog package found in the release information."
-                ;;
-        esac
-    fi
+            fi
+            ;;
+        *)
+            log_warn "No swiftDialog package found in the release information."
+            ;;
+    esac
     rm -rf "$tmp"
     return $rc
 }
@@ -1313,9 +1584,11 @@ dialog_wait_for_exit() {
     if ! is_true "$dialog_active" || [ -z "$dialog_pid" ]; then
         return 0
     fi
+    dialog_closed_by_user=1
     while kill -0 "$dialog_pid" 2>/dev/null; do
         if [ "$waited" -ge "$1" ]; then
             log "Closing the dialog after ${1}s."
+            dialog_closed_by_user=0
             dialog_cmd "quit:"
             sleep 2
             break
@@ -1324,6 +1597,44 @@ dialog_wait_for_exit() {
         waited=$((waited + 2))
     done
     dialog_active=0
+}
+
+# dialog_run_completion_command OUTCOME - runs the administrator's command after the user clicked the
+# completion button. Skipped when the dialog was closed by timeout, when nothing is configured, on a
+# failed run, and in dry-run mode. The command text is not written to the log.
+dialog_run_completion_command() {
+    local rc
+    [ -n "$completion_command" ] || return 0
+    case "$1" in
+        success | warnings) ;;
+        *) return 0 ;;
+    esac
+    if ! is_true "$dialog_closed_by_user"; then
+        log "Completion command skipped: the dialog was not closed by the user."
+        return 0
+    fi
+    if is_true "${dry_run:-0}"; then
+        log "Dry run: completion command not executed."
+        return 0
+    fi
+    if is_true "$completion_command_as_user"; then
+        if [ -z "$console_user" ] || [ "$console_user" = "root" ] || [ "$console_user" = "loginwindow" ]; then
+            log_warn "Completion command skipped: no console user."
+            return 0
+        fi
+        log "Running completion command as $console_user."
+        run_with_timeout 60 run_as_user /bin/bash -c "$completion_command" >> "$logfile" 2>&1
+    else
+        log "Running completion command as root."
+        run_with_timeout 60 /bin/bash -c "$completion_command" >> "$logfile" 2>&1
+    fi
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+        log "Completion command finished."
+    else
+        log_warn "Completion command exited with code $rc."
+    fi
+    return 0
 }
 
 # dialog_quit - asks swiftDialog to close, then makes sure it is gone.
@@ -1339,8 +1650,7 @@ dialog_quit() {
     done
     if [ -n "$dialog_pid" ] && kill -0 "$dialog_pid" 2>/dev/null; then
         log_warn "swiftDialog did not quit; stopping it."
-        pkill -TERM -P "$dialog_pid" 2>/dev/null
-        kill -TERM "$dialog_pid" 2>/dev/null
+        terminate_pid_tree "$dialog_pid"
     fi
     dialog_active=0
 }
@@ -1550,6 +1860,10 @@ execute_task() {
 }
 
 run_detection_task() {
+    if [ "$TASK_STRATEGY" = "customScript" ] && [ -n "$TASK_SCRIPT" ]; then
+        run_app_script_task
+        return 0
+    fi
     if [ "$TASK_STRATEGY" = "detectionOnly" ]; then
         if detect_application; then
             task_set complete
@@ -1598,6 +1912,53 @@ run_installer_task() {
             result=failed
             log "installer exited with $rc for $TASK_ID."
         fi
+        attempt=$((attempt + 1))
+    done
+    task_set "$result"
+}
+
+# run_app_script_task - "Run custom script" applications: skip the script when the app is already detected,
+# otherwise run the linked script (with timeout and retries), then detect the app.
+run_app_script_task() {
+    local script attempt=1 attempts rc result=failed
+    if detect_application; then
+        task_set complete "Already installed"
+        return 0
+    fi
+    script="$script_dir/$TASK_SCRIPT"
+    if [ ! -f "$script" ]; then
+        log_error "Script for $TASK_ID is missing: $script"
+        task_set failed "Script file missing"
+        return 0
+    fi
+    attempts=$((TASK_RETRIES + 1))
+    while [ "$attempt" -le "$attempts" ]; do
+        log "Running $TASK_SCRIPT for $TASK_NAME as $TASK_CONTEXT (attempt $attempt of $attempts)."
+        if [ "$TASK_CONTEXT" = "user" ]; then
+            run_with_timeout "$TASK_TIMEOUT" run_as_user "$script" >> "$logfile" 2>&1
+        else
+            run_with_timeout "$TASK_TIMEOUT" "$script" >> "$logfile" 2>&1
+        fi
+        rc=$?
+        if code_in_list "$rc" "$TASK_SUCCESS_CODES"; then
+            if detect_application; then
+                task_set complete
+                return 0
+            fi
+            log "$TASK_SCRIPT succeeded but $TASK_NAME is not detected yet; waiting for it."
+            if wait_until "$TASK_TIMEOUT" detect_application; then
+                task_set complete
+            else
+                task_set timedOut
+            fi
+            return 0
+        fi
+        if [ "$rc" -eq 124 ]; then
+            result=timedOut
+        else
+            result=failed
+        fi
+        log "$TASK_SCRIPT exited with $rc (success codes: $TASK_SUCCESS_CODES)."
         attempt=$((attempt + 1))
     done
     task_set "$result"
@@ -1790,8 +2151,10 @@ running_count() {
 }
 
 terminate_pid_tree() {
-    pkill -TERM -P "$1" 2>/dev/null
-    kill -TERM "$1" 2>/dev/null
+    local family
+    family="$(descendant_pids "$1")"
+    # shellcheck disable=SC2086
+    signal_pids TERM $family "$1"
 }
 
 # poll_running - collects finished background tasks and enforces the maximum enrollment duration.
@@ -1973,7 +2336,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 mkdir -p "$logandmetadir" && chown root:wheel "$logandmetadir" && chmod 755 "$logandmetadir"
-: > "$logfile" && chown root:wheel "$logfile" && chmod 600 "$logfile"
+: > "$logfile" && chown root:wheel "$logfile" && chmod 644 "$logfile"
 find "$logandmetadir" -maxdepth 1 -type f -name "${appname}_preinstall_*.log" 2>/dev/null | sort -r | tail -n +11 | while IFS= read -r old; do
     rm -f "$old"
 done
@@ -1988,6 +2351,52 @@ if launchctl print "system/$label" >/dev/null 2>&1; then
 else
     log "LaunchDaemon $label is not loaded."
 fi
+exit 0
+"""#
+
+    /// The script for the Intune app's "Pre-install script" setting (not part of the installer package). Intune runs
+    /// it as root before installing the package; a non-zero exit stops the installation.
+    static let intunePreInstallScript = #"""
+#!/bin/bash
+#
+# pre-install - Intune pre-install script for the enrollment package.
+# Generated by Enrollment Bundle Studio. Bash 3.2 compatible, no prompts.
+#
+# Script type : Pre-install script of the macOS app (PKG) in Intune. Runs as root before the package installs.
+# Behaviour   : A Mac that already has the onboarding flag is already onboarded, so the package is not installed
+#               (exit 1). Any other Mac installs normally (exit 0). Remove the flag file to onboard a Mac again.
+# Exit codes  : 0 = install the package; 1 = do not install (already onboarded).
+
+set -u
+PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+
+appname="onBoarding"
+logandmetadir="/Library/Logs/Microsoft/IntuneScripts/$appname"
+log_keep=10
+logfile="$logandmetadir/${appname}_intune-preinstall_$(date +%Y%m%d-%H%M%S).log"
+onboarding_flag=__ONBOARDING_FLAG__
+
+log() {
+    printf '%s [INFO] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$logfile" 2>/dev/null
+}
+
+if [ "$(id -u)" -eq 0 ]; then
+    mkdir -p "$logandmetadir" && chown root:wheel "$logandmetadir" && chmod 755 "$logandmetadir"
+    : > "$logfile" && chown root:wheel "$logfile" && chmod 644 "$logfile"
+    find "$logandmetadir" -maxdepth 1 -type f -name "${appname}_intune-preinstall_*.log" 2>/dev/null | sort -r | tail -n +$((log_keep + 1)) | while IFS= read -r old; do
+        rm -f "$old"
+    done
+fi
+
+if [ -n "$onboarding_flag" ] && [ -f "$onboarding_flag" ]; then
+    log "Onboarding flag present at $onboarding_flag: this Mac is already onboarded; the package is not installed."
+    printf '%s: already onboarded (flag present), package not installed\n' "$appname" >&2
+    echo "SKIPPED: already onboarded"
+    exit 1
+fi
+
+log "No onboarding flag at ${onboarding_flag:-<none configured>}; the package will install."
+echo "OK: not onboarded yet, installing"
 exit 0
 """#
 
@@ -2027,7 +2436,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 mkdir -p "$logandmetadir" && chown root:wheel "$logandmetadir" && chmod 755 "$logandmetadir"
-: > "$logfile" && chown root:wheel "$logfile" && chmod 600 "$logfile"
+: > "$logfile" && chown root:wheel "$logfile" && chmod 644 "$logfile"
 find "$logandmetadir" -maxdepth 1 -type f -name "${appname}_postinstall_*.log" 2>/dev/null | sort -r | tail -n +11 | while IFS= read -r old; do
     rm -f "$old"
 done
@@ -2038,6 +2447,21 @@ if [ "$target_volume" != "/" ]; then
 fi
 if [ ! -f "$install_dir/enrollment.sh" ]; then
     log_error "Framework missing at $install_dir"
+    exit 1
+fi
+
+# Never apply recursive ownership and permission changes to a system folder or a path that is not absolute.
+install_depth="$(printf '%s' "$install_dir" | awk -F/ '{print NF-1}')"
+case "$install_dir" in
+    /* ) install_unsafe=0 ;;
+    * ) install_unsafe=1 ;;
+esac
+case "$install_dir" in
+    *..* | / | /Library | /Library/ | /Applications | /Users | /System | /usr | /bin | /sbin | /private | /var | \
+    "/Library/Application Support" | "/Library/Application Support/" | /Library/LaunchDaemons) install_unsafe=1 ;;
+esac
+if [ "$install_unsafe" -ne 0 ] || [ "$install_depth" -lt 3 ]; then
+    log_error "Refusing to change ownership and permissions of $install_dir"
     exit 1
 fi
 

@@ -2,6 +2,13 @@ import Foundation
 
 /// Script, system-task and execution-option editing.
 extension EnrollmentProject {
+    /// Next default order for an imported script: numbered from 100 in steps of 10, ahead of applications.
+    var nextScriptExecutionOrder: Int {
+        let orders = scripts.map { $0.execution.executionOrder }.filter { $0 < TaskExecutionOptions.defaultApplicationOrder }
+        return ((orders.max() ?? 90) / 10 + 1) * 10
+    }
+
+    /// Next default order for a system task: after every application and script.
     var nextExecutionOrder: Int {
         let orders = allApplications.map { $0.execution.executionOrder }
             + scripts.map { $0.execution.executionOrder }

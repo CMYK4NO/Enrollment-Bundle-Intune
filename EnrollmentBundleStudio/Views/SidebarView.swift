@@ -10,9 +10,10 @@ struct SidebarView: View {
             Section("Project") {
                 row(.overview)
                 row(.branding)
-                row(.applications, badge: project.allApplications.filter { $0.isEnabled }.count)
                 row(.scripts, badge: project.scripts.count)
+                row(.applications, badge: project.allApplications.filter { $0.isEnabled }.count)
                 row(.execution)
+                row(.dock)
             }
             Section("Review") {
                 row(.preview)
@@ -21,9 +22,6 @@ struct SidebarView: View {
             Section("Build") {
                 row(.packageBuilder)
                 row(.buildHistory)
-            }
-            Section {
-                row(.settings)
             }
         }
         .listStyle(.sidebar)

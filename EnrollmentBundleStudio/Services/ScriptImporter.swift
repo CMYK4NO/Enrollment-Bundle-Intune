@@ -81,8 +81,10 @@ enum ScriptImporter {
 
         var execution = TaskExecutionOptions()
         execution.isRequired = false
+        // Imported scripts run in the background; the administrator can show one in the enrollment list.
+        execution.isVisible = false
         execution.timeoutSeconds = project.settings.defaultTaskTimeoutSeconds
-        execution.executionOrder = project.nextExecutionOrder
+        execution.executionOrder = project.nextScriptExecutionOrder
         execution.messages = .script
 
         let item = ScriptItem(

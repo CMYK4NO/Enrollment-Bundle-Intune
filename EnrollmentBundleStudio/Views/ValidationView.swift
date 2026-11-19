@@ -8,6 +8,7 @@ extension ValidationArea {
         case .applications: return .applications
         case .scripts: return .scripts
         case .execution: return .execution
+        case .dock: return .dock
         case .environment: return .settings
         }
     }

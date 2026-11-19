@@ -36,6 +36,7 @@ extension EnrollmentProject {
         if let logo = branding.logoPath { paths.insert(logo) }
         if let banner = branding.bannerPath { paths.insert(banner) }
         if let overlay = branding.overlayIconPath { paths.insert(overlay) }
+        if let wallpaper = branding.wallpaperPath { paths.insert(wallpaper) }
         for application in allApplications where application.icon.kind == .projectAsset {
             paths.insert(application.icon.value)
         }
@@ -46,6 +47,32 @@ extension EnrollmentProject {
             paths.insert(script.relativePath)
         }
         return paths
+    }
+
+    /// A plain-language list of what in this project runs as code on the Macs: scripts, custom detection and
+    /// validation commands, and the completion command. Nil when the project carries none. Shown when a
+    /// project comes from outside, so the administrator reviews it before building a package.
+    var commandSummary: String? {
+        var parts: [String] = []
+        if !scripts.isEmpty {
+            parts.append("\(scripts.count) script\(scripts.count == 1 ? "" : "s")")
+        }
+        let detectionCommands = allApplications.filter {
+            $0.detection.method == .customCommand && !$0.detection.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+        if detectionCommands > 0 {
+            parts.append("\(detectionCommands) detection command\(detectionCommands == 1 ? "" : "s")")
+        }
+        let validationCommands = systemTasks.filter {
+            $0.validation?.method == .customCommand && !($0.validation?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+        if validationCommands > 0 {
+            parts.append("\(validationCommands) validation command\(validationCommands == 1 ? "" : "s")")
+        }
+        if !branding.completionCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append("a completion command")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
     /// Installer packages referenced by applications. Kept apart from `referencedAssetPaths`
